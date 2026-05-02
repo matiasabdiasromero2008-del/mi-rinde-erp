@@ -6,36 +6,66 @@ from pydantic import BaseModel
 from typing import List, Optional
 import bcrypt
 import os
+import sys
 from datetime import datetime
 
-from database import get_connection, init_db
-import logic
+# Import debugging
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+try:
+    from database import get_connection, init_db
+    import logic
+except ImportError as e:
+    logger.error(f"Error importando modulos locales: {e}")
+    # In some environments, we might need to add current dir to path
+    sys.path.append(os.path.dirname(__file__))
+    from database import get_connection, init_db
+    import logic
 
 app = FastAPI(title="Rinde ERP API")
-
-# Initialize DB on startup
-@app.on_event("startup")
-def startup_event():
-    init_db()
-
-# Serve Frontend
-frontend_dir = os.path.join(os.path.dirname(__file__), "frontend")
-if not os.path.exists(frontend_dir):
-    os.makedirs(frontend_dir)
-app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
-
-@app.get("/")
-def serve_index():
-    return FileResponse(os.path.join(frontend_dir, "index.html"))
 
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # For development
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Initialize DB and Mount Static Files safely
+@app.on_event("startup")
+def startup_event():
+    logger.info("Iniciando aplicacion...")
+    try:
+        init_db()
+        logger.info("Base de datos inicializada correctamente.")
+    except Exception as e:
+        logger.error(f"Error inicializando la base de datos: {e}")
+
+# Paths for Frontend
+base_dir = os.path.dirname(__file__)
+frontend_dir = os.path.join(base_dir, "frontend")
+
+logger.info(f"Buscando carpeta frontend en: {frontend_dir}")
+
+if os.path.exists(frontend_dir):
+    app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
+    logger.info("Carpeta frontend montada en /static")
+else:
+    logger.error(f"CRITICO: No se encuentra la carpeta 'frontend' en {frontend_dir}")
+
+@app.get("/")
+def serve_index():
+    index_path = os.path.join(frontend_dir, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    else:
+        logger.error(f"Archivo index.html no encontrado en {index_path}")
+        return {"error": "Frontend not found. Please ensure the 'frontend' folder is uploaded to the root of your repository."}
 
 # --- Pydantic Models ---
 
