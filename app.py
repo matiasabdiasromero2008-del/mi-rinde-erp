@@ -8,8 +8,6 @@ import bcrypt
 import os
 import sys
 from datetime import datetime
-
-# Import debugging
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -20,14 +18,12 @@ try:
     import logic
 except ImportError as e:
     logger.error(f"Error importando modulos locales: {e}")
-    # In some environments, we might need to add current dir to path
     sys.path.append(os.path.dirname(__file__))
     from database import get_connection, init_db
     import logic
 
 app = FastAPI(title="Rinde ERP API")
 
-# CORS configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -36,39 +32,56 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize DB and Mount Static Files safely
+# Debug: List files in current directory
+logger.info(f"Archivos en el directorio actual: {os.listdir('.')}")
+
 @app.on_event("startup")
 def startup_event():
-    logger.info("Iniciando aplicacion...")
     try:
         init_db()
-        logger.info("Base de datos inicializada correctamente.")
+        logger.info("Base de datos inicializada.")
     except Exception as e:
-        logger.error(f"Error inicializando la base de datos: {e}")
+        logger.error(f"Error DB: {e}")
 
-# Paths for Frontend
+# Robust Frontend Finding
 base_dir = os.path.dirname(__file__)
-frontend_dir = os.path.join(base_dir, "frontend")
+possible_paths = [
+    os.path.join(base_dir, "frontend"),
+    os.path.join(base_dir, "Frontend"),
+    "frontend",
+    "Frontend"
+]
 
-logger.info(f"Buscando carpeta frontend en: {frontend_dir}")
+frontend_dir = None
+for path in possible_paths:
+    if os.path.exists(path):
+        frontend_dir = path
+        break
 
-if os.path.exists(frontend_dir):
+if frontend_dir:
     app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
-    logger.info("Carpeta frontend montada en /static")
+    logger.info(f"Carpeta frontend encontrada y montada en: {frontend_dir}")
 else:
-    logger.error(f"CRITICO: No se encuentra la carpeta 'frontend' en {frontend_dir}")
+    logger.error("CRITICO: No se encuentra la carpeta 'frontend' en ninguna de las rutas probadas.")
 
 @app.get("/")
 def serve_index():
+    if not frontend_dir:
+        return {
+            "error": "No se encontró la carpeta 'frontend'.",
+            "archivos_detectados": os.listdir('.')
+        }
+    
     index_path = os.path.join(frontend_dir, "index.html")
     if os.path.exists(index_path):
         return FileResponse(index_path)
     else:
-        logger.error(f"Archivo index.html no encontrado en {index_path}")
-        return {"error": "Frontend not found. Please ensure the 'frontend' folder is uploaded to the root of your repository."}
+        return {
+            "error": f"index.html no encontrado en {frontend_dir}",
+            "archivos_en_frontend": os.listdir(frontend_dir)
+        }
 
 # --- Pydantic Models ---
-
 class LoginRequest(BaseModel):
     username: str
     password: str
@@ -99,7 +112,6 @@ class SaleRequest(BaseModel):
     date: Optional[str] = None
 
 # --- API Endpoints ---
-
 @app.post("/login")
 def login(req: LoginRequest):
     conn = get_connection()
@@ -107,7 +119,6 @@ def login(req: LoginRequest):
     cursor.execute("SELECT password_hash, role FROM users WHERE username = ?", (req.username,))
     result = cursor.fetchone()
     conn.close()
-    
     if result and bcrypt.checkpw(req.password.encode('utf-8'), result[0].encode('utf-8')):
         return {"success": True, "role": result[1], "username": req.username}
     else:
@@ -137,11 +148,7 @@ def create_expense(req: ExpenseRequest):
 def get_providers():
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("""
-        SELECT p.id, p.name, c.name 
-        FROM providers p 
-        JOIN categories c ON p.category_id = c.id
-    """)
+    cursor.execute("SELECT p.id, p.name, c.name FROM providers p JOIN categories c ON p.category_id = c.id")
     results = cursor.fetchall()
     conn.close()
     return [{"id": r[0], "name": r[1], "category": r[2]} for r in results]
@@ -153,16 +160,12 @@ def add_provider(req: ProviderModel):
     try:
         cursor.execute("SELECT id FROM categories WHERE name = ?", (req.category_name,))
         cat_id = cursor.fetchone()
-        if not cat_id:
-            raise HTTPException(status_code=400, detail="Category not found")
-        
+        if not cat_id: raise HTTPException(status_code=400, detail="Category not found")
         cursor.execute("INSERT INTO providers (name, category_id) VALUES (?, ?)", (req.name, cat_id[0]))
         conn.commit()
         return {"success": True}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        conn.close()
+    except Exception as e: raise HTTPException(status_code=400, detail=str(e))
+    finally: conn.close()
 
 @app.delete("/providers/{provider_id}")
 def delete_provider(provider_id: int):
@@ -180,18 +183,13 @@ def create_sale(req: SaleRequest):
     try:
         logic.record_sale(req.client_name, items_dict, req.discount, date_str)
         return {"success": True, "message": "Sale registered"}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e: raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/stock")
 def get_stock():
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("""
-        SELECT p.id, p.flavor_name, s.quantity_remaining 
-        FROM products p 
-        JOIN stock s ON p.id = s.product_id
-    """)
+    cursor.execute("SELECT p.id, p.flavor_name, s.quantity_remaining FROM products p JOIN stock s ON p.id = s.product_id")
     results = cursor.fetchall()
     conn.close()
     return [{"id": r[0], "flavor": r[1], "stock": r[2]} for r in results]
