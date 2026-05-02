@@ -59,6 +59,24 @@
                                     <select id="prov-cat" required></select>
                                 </div>
                             </div>
+                            <div class="form-row">
+                                <div class="input-group">
+                                    <label>Teléfono</label>
+                                    <input type="text" id="prov-phone">
+                                </div>
+                                <div class="input-group">
+                                    <label>Lugar</label>
+                                    <input type="text" id="prov-location">
+                                </div>
+                                <div class="input-group">
+                                    <label>Tiempo de Entrega</label>
+                                    <input type="text" id="prov-delivery">
+                                </div>
+                            </div>
+                            <div class="input-group">
+                                <label>Observaciones</label>
+                                <textarea id="prov-obs" rows="2" style="width:100%; background:rgba(15,23,42,0.6); color:white; border:1px solid var(--surface-border); border-radius:8px; padding:12px;"></textarea>
+                            </div>
                             <button type="submit" class="btn primary">Guardar Proveedor</button>
                             <div id="prov-msg"></div>
                         </form>
@@ -71,6 +89,10 @@
                                 <tr>
                                     <th>Nombre</th>
                                     <th>Categoría</th>
+                                    <th>Teléfono</th>
+                                    <th>Lugar</th>
+                                    <th>Entrega</th>
+                                    <th>Observaciones</th>
                                     <th>Acciones</th>
                                 </tr>
                             </thead>
@@ -115,36 +137,129 @@
                         <h3>Registrar Gasto</h3>
                         <form id="expense-form">
                             <div class="form-row">
-                                <div class="input-group">
-                                    <label>Proveedor</label>
-                                    <select id="exp-prov" required>
-                                        <option value="">Seleccione un proveedor</option>
-                                    </select>
-                                </div>
-                                <div class="input-group">
-                                    <label>Categoría (Auto)</label>
-                                    <select id="exp-cat" required readonly disabled>
-                                        <option value="">Seleccione proveedor primero</option>
-                                    </select>
-                                </div>
+                            <div class="input-group" style="flex: 2;">
+                                <label>Proveedor</label>
+                                <select id="exp-prov" required>
+                                    <option value="">Seleccione un proveedor</option>
+                                </select>
                             </div>
-                            <div class="form-row">
-                                <div class="input-group">
-                                    <label>Descripción</label>
-                                    <input type="text" id="exp-desc" required>
-                                </div>
-                                <div class="input-group">
-                                    <label>Cantidad</label>
-                                    <input type="number" step="0.01" id="exp-qty" required>
-                                </div>
-                                <div class="input-group">
-                                    <label>Precio Unitario</label>
-                                    <input type="number" step="0.01" id="exp-price" required>
-                                </div>
+                            <div class="input-group">
+                                <label>Categoría (Auto)</label>
+                                <select id="exp-cat" required readonly disabled>
+                                    <option value="">Seleccione proveedor primero</option>
+                                </select>
                             </div>
-                            <button type="submit" class="btn primary">Guardar Gasto</button>
-                            <div id="exp-msg"></div>
+                            <div class="input-group">
+                                <label>Fecha</label>
+                                <input type="date" id="exp-date">
+                            </div>
+                        </div>
+
+                        <div class="items-header" style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px; color: var(--text-muted); font-size: 0.8rem; font-weight: 600;">
+                            <div>PRODUCTO / DESCRIPCIÓN</div>
+                            <div>CANTIDAD</div>
+                            <div>PRECIO UNIT. ($U)</div>
+                            <div>SUBTOTAL ($)</div>
+                        </div>
+
+                        <div id="expense-items-container">
+                            <!-- Dynamic rows will be injected here -->
+                            <div class="expense-row" style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 40px; gap: 10px; margin-bottom: 10px;">
+                                <input type="text" class="exp-item-desc" placeholder="Producto / Descripción" required>
+                                <input type="number" step="0.01" class="exp-item-qty" placeholder="Cantidad" required>
+                                <input type="number" step="0.01" class="exp-item-unit" placeholder="Precio Unit. ($U)" required>
+                                <input type="text" class="exp-item-subtotal" readonly disabled placeholder="$" style="background: rgba(0,0,0,0.2);">
+                                <div></div> <!-- Empty for first row delete button -->
+                            </div>
+                        </div>
+
+                        <button type="button" id="add-item-btn" class="btn secondary outline" style="width: auto; margin-bottom: 20px;">+ Agregar otro producto</button>
+
+                        <div style="display: flex; justify-content: flex-end; align-items: center; gap: 20px; margin-top: 20px;">
+                            <div style="font-size: 1.2rem; font-weight: 700; color: var(--primary);">TOTAL: $<span id="exp-total-display">0.00</span></div>
+                            <button type="submit" class="btn primary" style="width: auto; padding: 12px 40px;">Guardar Gasto Completo</button>
+                        </div>
+                        <div id="exp-msg"></div>
+
+
                         </form>
+                    </div>
+                </section>
+
+                <!-- Admin: Escandallos (La Planilla Maestra) -->
+                <section id="sec-escandallos" class="section">
+                    <div class="card glass">
+                        <h3>Crear / Editar Escandallo (Receta)</h3>
+                        <p class="text-muted">Defina el sabor, rendimiento e insumos en un solo lugar.</p>
+                        <form id="escandallo-form">
+                            <div class="form-row">
+                                <div class="input-group" style="flex:2">
+                                    <label>Sabor (Producto Final)</label>
+                                    <input type="text" id="esc-sabor" required placeholder="Ej: Mermelada de Higo">
+                                </div>
+                                <div class="input-group">
+                                    <label>Precio Venta ($)</label>
+                                    <input type="number" step="0.01" id="esc-sale-price" required>
+                                </div>
+                                <div class="input-group">
+                                    <label>Rendimiento (Unidades)</label>
+                                    <input type="number" id="esc-yield" required placeholder="Ej: 50">
+                                </div>
+                            </div>
+                            
+                            <div class="items-header" style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; margin-bottom: 10px; color: var(--text-muted); font-size: 0.8rem; font-weight: 600; margin-top:20px;">
+                                <div>INSUMO (ELEMENTO)</div>
+                                <div>CANTIDAD POR TANDA</div>
+                                <div>COSTO ESTIMADO ($)</div>
+                            </div>
+
+                            <div id="esc-items-container">
+                                <!-- Dynamic rows -->
+                                <div class="esc-row" style="display: grid; grid-template-columns: 2fr 1fr 1fr 40px; gap: 10px; margin-bottom: 10px;">
+                                    <input type="text" class="esc-item-name" placeholder="Ej: Azúcar" required>
+                                    <input type="number" step="0.01" class="esc-item-qty" placeholder="Cant." required>
+                                    <input type="text" class="esc-item-cost" readonly disabled placeholder="Auto $" style="background: rgba(0,0,0,0.2);">
+                                    <button type="button" class="btn secondary outline remove-esc-item" style="padding:0; height:38px; display:none;">&times;</button>
+                                </div>
+                            </div>
+                            <button type="button" id="esc-add-item-btn" class="btn secondary outline" style="width:auto">+ Agregar Insumo</button>
+
+                            <div style="display: flex; justify-content: flex-end; align-items: center; gap: 30px; margin-top: 30px; border-top: 1px solid var(--surface-border); padding-top: 20px;">
+                                <div style="text-align: right;">
+                                    <div class="text-muted">Costo Tanda (PRECIO):</div>
+                                    <div style="font-size: 1.2rem; font-weight: 700;" id="esc-total-batch-cost">$0.00</div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <div class="text-muted">GASTO POR UNIDAD (GPU):</div>
+                                    <div style="font-size: 1.5rem; font-weight: 700; color: var(--primary);" id="esc-gpu-display">$0.00</div>
+                                </div>
+                                <button type="submit" class="btn primary" style="width:auto; padding: 12px 50px;">Guardar Escandallo</button>
+                            </div>
+                            <div id="esc-msg"></div>
+                        </form>
+                    </div>
+
+                    <div class="card glass mt-4">
+                        <h3>Planilla Maestra de Escandallos</h3>
+                        <div class="table-container" style="overflow-x: auto;">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>SABOR</th>
+                                        <th>INSUMO</th>
+                                        <th>CANTIDAD</th>
+                                        <th>RENDIMIENTO</th>
+                                        <th>COSTO UNITARIO</th>
+                                        <th>COSTO TOTAL</th>
+                                        <th>GPU</th>
+                                        <th>ACCIONES</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="escandallo-tbody">
+                                    <!-- Grouped rows will be injected here -->
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </section>
 
@@ -190,6 +305,9 @@
             </main>
         </div>
     </div>
+    <datalist id="ingredients-list">
+        <!-- Options will be added via JS -->
+    </datalist>
     <script src="/static/app.js"></script>
 </body>
 </html>
