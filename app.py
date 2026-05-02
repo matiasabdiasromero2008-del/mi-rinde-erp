@@ -32,9 +32,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Debug: List files in current directory
-logger.info(f"Archivos en el directorio actual: {os.listdir('.')}")
-
 @app.on_event("startup")
 def startup_event():
     try:
@@ -45,41 +42,31 @@ def startup_event():
 
 # Robust Frontend Finding
 base_dir = os.path.dirname(__file__)
-possible_paths = [
-    os.path.join(base_dir, "frontend"),
-    os.path.join(base_dir, "Frontend"),
-    "frontend",
-    "Frontend"
-]
-
 frontend_dir = None
-for path in possible_paths:
-    if os.path.exists(path):
-        frontend_dir = path
-        break
+
+# Case 1: Standard folder
+if os.path.exists(os.path.join(base_dir, "frontend")):
+    frontend_dir = os.path.join(base_dir, "frontend")
+elif os.path.exists(os.path.join(base_dir, "Frontend")):
+    frontend_dir = os.path.join(base_dir, "Frontend")
+# Case 2: Files are in the root (Detected from user logs)
+elif os.path.exists(os.path.join(base_dir, "index.html")):
+    frontend_dir = base_dir
 
 if frontend_dir:
+    # If serving from root, we mount it as static so /static/style.css works
     app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
-    logger.info(f"Carpeta frontend encontrada y montada en: {frontend_dir}")
+    logger.info(f"Frontend detectado en: {frontend_dir}")
 else:
-    logger.error("CRITICO: No se encuentra la carpeta 'frontend' en ninguna de las rutas probadas.")
+    logger.error("No se encontro el frontend en ninguna ubicacion.")
 
 @app.get("/")
 def serve_index():
     if not frontend_dir:
-        return {
-            "error": "No se encontró la carpeta 'frontend'.",
-            "archivos_detectados": os.listdir('.')
-        }
+        return {"error": "No se encontró index.html. Por favor verifique los archivos en GitHub."}
     
     index_path = os.path.join(frontend_dir, "index.html")
-    if os.path.exists(index_path):
-        return FileResponse(index_path)
-    else:
-        return {
-            "error": f"index.html no encontrado en {frontend_dir}",
-            "archivos_en_frontend": os.listdir(frontend_dir)
-        }
+    return FileResponse(index_path)
 
 # --- Pydantic Models ---
 class LoginRequest(BaseModel):
