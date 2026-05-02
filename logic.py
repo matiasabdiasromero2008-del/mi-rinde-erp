@@ -17,23 +17,27 @@ def update_all_gpus():
 
 def recalculate_product_gpu(product_id, cursor):
     """Calculate GPU = sum(qty * cost) / yield."""
+    # Get yield for the product
+    cursor.execute("SELECT yield_per_batch FROM products WHERE id = ?", (product_id,))
+    yield_val = cursor.fetchone()[0] or 1
+    
+    # Get ingredients and their costs
     cursor.execute('''
-        SELECT e.qty_per_batch, e.yield_per_batch, i.last_unit_cost
-        FROM escandallo e
-        JOIN ingredients i ON e.ingredient_id = i.id
-        WHERE e.product_id = ?
+        SELECT pi.quantity_per_batch, i.last_unit_cost
+        FROM product_ingredients pi
+        JOIN ingredients i ON pi.ingredient_id = i.id
+        WHERE pi.product_id = ?
     ''', (product_id,))
     
     items = cursor.fetchall()
     if not items:
+        # If no recipe, GPU is 0
+        cursor.execute("UPDATE products SET current_gpu = 0 WHERE id = ?", (product_id,))
         return
         
     total_batch_cost = 0
-    yield_val = 1
-    
-    for qty, yld, cost in items:
+    for qty, cost in items:
         total_batch_cost += (qty * cost)
-        yield_val = yld # Yield is same for all ingredients in a batch
         
     gpu = total_batch_cost / yield_val if yield_val > 0 else 0
     

@@ -32,34 +32,33 @@ def init_db():
     )
     ''')
 
+    # Products (Sabores)
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        flavor_name TEXT UNIQUE NOT NULL,
+        sale_price REAL NOT NULL,
+        yield_per_batch REAL DEFAULT 1,
+        current_gpu REAL DEFAULT 0
+    )
+    ''')
+
     # Ingredients (Insumos)
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS ingredients (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT UNIQUE NOT NULL,
-        unit TEXT NOT NULL,
         last_unit_cost REAL DEFAULT 0
     )
     ''')
 
-    # Products
+    # Product-Ingredient mapping (The Escandallo)
     cursor.execute('''
-    CREATE TABLE IF NOT EXISTS products (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        flavor_name TEXT UNIQUE NOT NULL,
-        sale_price REAL DEFAULT 0,
-        current_gpu REAL DEFAULT 0
-    )
-    ''')
-
-    # Escandallo (Recipes)
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS escandallo (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+    CREATE TABLE IF NOT EXISTS product_ingredients (
         product_id INTEGER,
         ingredient_id INTEGER,
-        qty_per_batch REAL,
-        yield_per_batch REAL,
+        quantity_per_batch REAL NOT NULL,
+        PRIMARY KEY (product_id, ingredient_id),
         FOREIGN KEY (product_id) REFERENCES products(id),
         FOREIGN KEY (ingredient_id) REFERENCES ingredients(id)
     )
@@ -132,6 +131,10 @@ def init_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT UNIQUE NOT NULL,
         category_id INTEGER,
+        phone TEXT,
+        location TEXT,
+        delivery_time TEXT,
+        observations TEXT,
         FOREIGN KEY (category_id) REFERENCES categories(id)
     )
     ''')

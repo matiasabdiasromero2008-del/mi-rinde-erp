@@ -87,6 +87,27 @@ class ExpenseRequest(BaseModel):
 class ProviderModel(BaseModel):
     name: str
     category_name: str
+    phone: Optional[str] = None
+    location: Optional[str] = None
+    delivery_time: Optional[str] = None
+    observations: Optional[str] = None
+
+class IngredientModel(BaseModel):
+    name: str
+
+class ProductModel(BaseModel):
+    flavor_name: str
+    sale_price: float
+    yield_per_batch: float
+
+class RecipeItem(BaseModel):
+    ingredient_id: int
+    quantity: float
+
+class RecipeRequest(BaseModel):
+    product_id: int
+    yield_per_batch: float
+    items: List[RecipeItem]
 
 class SaleItemModel(BaseModel):
     product_id: int
@@ -135,10 +156,17 @@ def create_expense(req: ExpenseRequest):
 def get_providers():
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT p.id, p.name, c.name FROM providers p JOIN categories c ON p.category_id = c.id")
+    cursor.execute("""
+        SELECT p.id, p.name, c.name, p.phone, p.location, p.delivery_time, p.observations
+        FROM providers p 
+        JOIN categories c ON p.category_id = c.id
+    """)
     results = cursor.fetchall()
     conn.close()
-    return [{"id": r[0], "name": r[1], "category": r[2]} for r in results]
+    return [{
+        "id": r[0], "name": r[1], "category": r[2], 
+        "phone": r[3], "location": r[4], "delivery_time": r[5], "observations": r[6]
+    } for r in results]
 
 @app.post("/providers")
 def add_provider(req: ProviderModel):
@@ -148,7 +176,11 @@ def add_provider(req: ProviderModel):
         cursor.execute("SELECT id FROM categories WHERE name = ?", (req.category_name,))
         cat_id = cursor.fetchone()
         if not cat_id: raise HTTPException(status_code=400, detail="Category not found")
-        cursor.execute("INSERT INTO providers (name, category_id) VALUES (?, ?)", (req.name, cat_id[0]))
+        
+        cursor.execute("""
+            INSERT INTO providers (name, category_id, phone, location, delivery_time, observations) 
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (req.name, cat_id[0], req.phone, req.location, req.delivery_time, req.observations))
         conn.commit()
         return {"success": True}
     except Exception as e: raise HTTPException(status_code=400, detail=str(e))
@@ -162,6 +194,82 @@ def delete_provider(provider_id: int):
     conn.commit()
     conn.close()
     return {"success": True}
+
+# --- Escandallo Endpoints ---
+
+@app.get("/ingredients")
+def get_ingredients():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name, last_unit_cost FROM ingredients ORDER BY name")
+    results = cursor.fetchall()
+    conn.close()
+    return [{"id": r[0], "name": r[1], "cost": r[2]} for r in results]
+
+@app.post("/ingredients")
+def add_ingredient(req: IngredientModel):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT INTO ingredients (name) VALUES (?)", (req.name,))
+        conn.commit()
+        return {"success": True}
+    except Exception as e: raise HTTPException(status_code=400, detail=str(e))
+    finally: conn.close()
+
+@app.post("/products")
+def add_product(req: ProductModel):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            INSERT INTO products (flavor_name, sale_price, yield_per_batch) 
+            VALUES (?, ?, ?)
+        """, (req.flavor_name, req.sale_price, req.yield_per_batch))
+        conn.commit()
+        return {"success": True}
+    except Exception as e: raise HTTPException(status_code=400, detail=str(e))
+    finally: conn.close()
+
+@app.get("/recipes/{product_id}")
+def get_recipe(product_id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT i.id, i.name, pi.quantity_per_batch, i.last_unit_cost
+        FROM product_ingredients pi
+        JOIN ingredients i ON pi.ingredient_id = i.id
+        WHERE pi.product_id = ?
+    """, (product_id,))
+    items = cursor.fetchall()
+    conn.close()
+    return [{"id": r[0], "name": r[1], "quantity": r[2], "cost": r[3]} for r in items]
+
+@app.post("/recipes")
+def save_recipe(req: RecipeRequest):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        # Update yield in products table
+        cursor.execute("UPDATE products SET yield_per_batch = ? WHERE id = ?", (req.yield_per_batch, req.product_id))
+        
+        # Clear old recipe
+        cursor.execute("DELETE FROM product_ingredients WHERE product_id = ?", (req.product_id,))
+        
+        # Insert new items
+        for item in req.items:
+            cursor.execute("""
+                INSERT INTO product_ingredients (product_id, ingredient_id, quantity_per_batch)
+                VALUES (?, ?, ?)
+            """, (req.product_id, item.ingredient_id, item.quantity))
+        
+        # Recalculate GPU immediately
+        logic.recalculate_product_gpu(req.product_id, cursor)
+        
+        conn.commit()
+        return {"success": True}
+    except Exception as e: raise HTTPException(status_code=400, detail=str(e))
+    finally: conn.close()
 
 @app.post("/sales")
 def create_sale(req: SaleRequest):
