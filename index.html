@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rinde ERP</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Login View -->
+        <div id="login-view" class="view active">
+            <div class="login-card glass">
+                <h1>Rinde</h1>
+                <p>ERP de Rentabilidad Dinámica</p>
+                <form id="login-form">
+                    <div class="input-group">
+                        <label for="username">Usuario</label>
+                        <input type="text" id="username" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="password">Contraseña</label>
+                        <input type="password" id="password" required>
+                    </div>
+                    <button type="submit" class="btn primary">Ingresar</button>
+                    <div id="login-error" class="error-msg"></div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Dashboard View -->
+        <div id="dashboard-view" class="view">
+            <nav class="sidebar glass">
+                <div class="brand">Rinde</div>
+                <ul id="nav-links">
+                    <!-- Links injected dynamically based on role -->
+                </ul>
+                <button id="logout-btn" class="btn secondary outline">Cerrar Sesión</button>
+            </nav>
+            <main class="content">
+                <header>
+                    <h2 id="view-title">Dashboard</h2>
+                    <div class="user-info" id="user-display"></div>
+                </header>
+
+                <!-- Admin: Proveedores -->
+                <section id="sec-proveedores" class="section">
+                    <div class="card glass">
+                        <h3>Registrar Nuevo Proveedor</h3>
+                        <form id="provider-form">
+                            <div class="form-row">
+                                <div class="input-group">
+                                    <label>Nombre del Proveedor</label>
+                                    <input type="text" id="prov-name" required>
+                                </div>
+                                <div class="input-group">
+                                    <label>Concepto (Categoría)</label>
+                                    <select id="prov-cat" required></select>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn primary">Guardar Proveedor</button>
+                            <div id="prov-msg"></div>
+                        </form>
+                    </div>
+
+                    <div class="card glass mt-4">
+                        <h3>Lista de Proveedores</h3>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Nombre</th>
+                                    <th>Categoría</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="providers-tbody"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Admin: Performance -->
+                <section id="sec-performance" class="section active">
+                    <div class="cards-grid">
+                        <div class="card glass metric-card">
+                            <h3>Ingresos</h3>
+                            <div class="value positive" id="metric-ingresos">$0.00</div>
+                        </div>
+                        <div class="card glass metric-card">
+                            <h3>GTR (Costo)</h3>
+                            <div class="value negative" id="metric-gtr">$0.00</div>
+                        </div>
+                        <div class="card glass metric-card">
+                            <h3>Egresos Op.</h3>
+                            <div class="value negative" id="metric-egresos">$0.00</div>
+                        </div>
+                        <div class="card glass metric-card highlight">
+                            <h3>Rentabilidad Real</h3>
+                            <div class="value" id="metric-rentabilidad">0.00%</div>
+                        </div>
+                    </div>
+                    <!-- Chart Placeholder -->
+                    <div class="card glass chart-container">
+                        <h3>Desglose de Gastos</h3>
+                        <div id="expenses-chart" class="chart-box">
+                            <!-- We can use simple CSS bars or a canvas if we add Chart.js later -->
+                            <div id="expenses-bars" class="bar-chart"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Admin: Carga de Gastos -->
+                <section id="sec-gastos" class="section">
+                    <div class="card glass">
+                        <h3>Registrar Gasto</h3>
+                        <form id="expense-form">
+                            <div class="form-row">
+                                <div class="input-group">
+                                    <label>Proveedor</label>
+                                    <select id="exp-prov" required>
+                                        <option value="">Seleccione un proveedor</option>
+                                    </select>
+                                </div>
+                                <div class="input-group">
+                                    <label>Categoría (Auto)</label>
+                                    <select id="exp-cat" required readonly disabled>
+                                        <option value="">Seleccione proveedor primero</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="input-group">
+                                    <label>Descripción</label>
+                                    <input type="text" id="exp-desc" required>
+                                </div>
+                                <div class="input-group">
+                                    <label>Cantidad</label>
+                                    <input type="number" step="0.01" id="exp-qty" required>
+                                </div>
+                                <div class="input-group">
+                                    <label>Precio Unitario</label>
+                                    <input type="number" step="0.01" id="exp-price" required>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn primary">Guardar Gasto</button>
+                            <div id="exp-msg"></div>
+                        </form>
+                    </div>
+                </section>
+
+                <!-- Operator: Ventas -->
+                <section id="sec-ventas" class="section">
+                    <div class="card glass">
+                        <h3>Registrar Venta</h3>
+                        <form id="sale-form">
+                            <div class="form-row">
+                                <div class="input-group">
+                                    <label>Cliente</label>
+                                    <input type="text" id="sale-client" required>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="input-group">
+                                    <label>Producto</label>
+                                    <select id="sale-product" required></select>
+                                </div>
+                                <div class="input-group">
+                                    <label>Cantidad</label>
+                                    <input type="number" id="sale-qty" required>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn primary">Confirmar Venta</button>
+                            <div id="sale-msg"></div>
+                        </form>
+                    </div>
+                    
+                    <div class="card glass mt-4">
+                        <h3>Stock Disponible</h3>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Sabor</th>
+                                    <th>Stock</th>
+                                </tr>
+                            </thead>
+                            <tbody id="stock-tbody"></tbody>
+                        </table>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+    <script src="/static/app.js"></script>
+</body>
+</html>
