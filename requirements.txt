@@ -1,0 +1,11 @@
+bcrypt
+matplotlib
+fpdf2
+pandas
+openpyxl
+firebase-admin
+fastapi
+uvicorn
+pydantic
+python-multipart
+gunicorn
