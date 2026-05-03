@@ -359,6 +359,17 @@ async function loadProvidersDropdown() {
     select.innerHTML = '<option value="">Seleccione un proveedor</option>' + allProviders.map(p => `<option value="${p.name}">${p.name}</option>`).join('');
 }
 
+document.getElementById('exp-prov')?.addEventListener('change', (e) => {
+    const providerName = e.target.value;
+    const provider = allProviders.find(p => p.name === providerName);
+    const catSelect = document.getElementById('exp-cat');
+    if (provider) {
+        catSelect.value = provider.category;
+    } else {
+        catSelect.value = '';
+    }
+});
+
 async function deleteProvider(id) {
     if (confirm('¿Eliminar este proveedor?')) {
         await fetch(`${API_URL}/providers/${id}`, { method: 'DELETE' });
