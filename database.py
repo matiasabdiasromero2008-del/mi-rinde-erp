@@ -1,33 +1,30 @@
-import sqlite3
+import psycopg2
 import bcrypt
 import os
 
-DB_PATH = os.path.join("data", "rinde.db")
+DB_URL = os.environ.get("DATABASE_URL", "postgresql://neondb_owner:npg_3qmQAyfaS8oJ@ep-cool-waterfall-ajt00qej-pooler.c-3.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require")
 
 def get_connection():
-    return sqlite3.connect(DB_PATH)
+    return psycopg2.connect(DB_URL)
 
 def init_db():
-    if not os.path.exists("data"):
-        os.makedirs("data")
-        
     conn = get_connection()
     cursor = conn.cursor()
 
     # Users
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         username TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
         role TEXT CHECK(role IN ('Admin', 'Operator')) NOT NULL
     )
     ''')
 
-    # Categories (8 fixed categories)
+    # Categories
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS categories (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         name TEXT UNIQUE NOT NULL
     )
     ''')
@@ -35,7 +32,7 @@ def init_db():
     # Products (Sabores)
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS products (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         flavor_name TEXT UNIQUE NOT NULL,
         sale_price REAL NOT NULL,
         yield_per_batch REAL DEFAULT 1,
@@ -46,13 +43,13 @@ def init_db():
     # Ingredients (Insumos)
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS ingredients (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         name TEXT UNIQUE NOT NULL,
         last_unit_cost REAL DEFAULT 0
     )
     ''')
 
-    # Product-Ingredient mapping (The Escandallo)
+    # Product-Ingredient mapping
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS product_ingredients (
         product_id INTEGER,
@@ -67,19 +64,19 @@ def init_db():
     # Expenses
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS expenses (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         provider TEXT,
         category_id INTEGER,
-        date TEXT,
+        date DATE,
         total_amount REAL,
         FOREIGN KEY (category_id) REFERENCES categories(id)
     )
     ''')
 
-    # Expense Items (Support for up to 5 items per expense)
+    # Expense Items
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS expense_items (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         expense_id INTEGER,
         description TEXT,
         quantity REAL,
@@ -89,12 +86,26 @@ def init_db():
     )
     ''')
 
+    # Providers
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS providers (
+        id SERIAL PRIMARY KEY,
+        name TEXT UNIQUE NOT NULL,
+        category_id INTEGER,
+        phone TEXT,
+        location TEXT,
+        delivery_time TEXT,
+        observations TEXT,
+        FOREIGN KEY (category_id) REFERENCES categories(id)
+    )
+    ''')
+
     # Sales
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS sales (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         client_name TEXT,
-        date TEXT,
+        date DATE,
         discount REAL DEFAULT 0,
         total_income REAL,
         total_gpu_snapshot REAL,
@@ -106,7 +117,7 @@ def init_db():
     # Sale Items
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS sale_items (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         sale_id INTEGER,
         product_id INTEGER,
         quantity INTEGER,
@@ -125,31 +136,17 @@ def init_db():
     )
     ''')
 
-    # Providers
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS providers (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT UNIQUE NOT NULL,
-        category_id INTEGER,
-        phone TEXT,
-        location TEXT,
-        delivery_time TEXT,
-        observations TEXT,
-        FOREIGN KEY (category_id) REFERENCES categories(id)
-    )
-    ''')
-
-    # Seed Categories (User updated requirements)
+    # Seed Categories
     categories = [
         "SUELDOS", "INSUMOS", "UTENSILIOS", "PROGRAMAS", 
         "SITIO WEB", "DISEÑADOR", "PACKAGING", "MARKETING"
     ]
     for cat in categories:
-        cursor.execute("INSERT OR IGNORE INTO categories (name) VALUES (?)", (cat,))
+        cursor.execute("INSERT INTO categories (name) VALUES (%s) ON CONFLICT (name) DO NOTHING", (cat,))
 
-    # Create default Admin (password: admin123)
+    # Create default Admin
     admin_pass = bcrypt.hashpw("admin123".encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-    cursor.execute("INSERT OR IGNORE INTO users (username, password_hash, role) VALUES (?, ?, ?)", 
+    cursor.execute("INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s) ON CONFLICT (username) DO NOTHING", 
                    ("admin", admin_pass, "Admin"))
 
     conn.commit()

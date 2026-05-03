@@ -124,7 +124,7 @@ class SaleRequest(BaseModel):
 def login(req: LoginRequest):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT password_hash, role FROM users WHERE username = ?", (req.username,))
+    cursor.execute("SELECT password_hash, role FROM users WHERE username = %s", (req.username,))
     result = cursor.fetchone()
     conn.close()
     if result and bcrypt.checkpw(req.password.encode('utf-8'), result[0].encode('utf-8')):
@@ -173,13 +173,13 @@ def add_provider(req: ProviderModel):
     conn = get_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT id FROM categories WHERE name = ?", (req.category_name,))
+        cursor.execute("SELECT id FROM categories WHERE name = %s", (req.category_name,))
         cat_id = cursor.fetchone()
         if not cat_id: raise HTTPException(status_code=400, detail="Category not found")
         
         cursor.execute("""
             INSERT INTO providers (name, category_id, phone, location, delivery_time, observations) 
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """, (req.name, cat_id[0], req.phone, req.location, req.delivery_time, req.observations))
         conn.commit()
         return {"success": True}
@@ -190,7 +190,7 @@ def add_provider(req: ProviderModel):
 def delete_provider(provider_id: int):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM providers WHERE id = ?", (provider_id,))
+    cursor.execute("DELETE FROM providers WHERE id = %s", (provider_id,))
     conn.commit()
     conn.close()
     return {"success": True}
@@ -211,7 +211,7 @@ def add_ingredient(req: IngredientModel):
     conn = get_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("INSERT INTO ingredients (name) VALUES (?)", (req.name,))
+        cursor.execute("INSERT INTO ingredients (name) VALUES (%s)", (req.name,))
         conn.commit()
         return {"success": True}
     except Exception as e: raise HTTPException(status_code=400, detail=str(e))
@@ -224,7 +224,7 @@ def add_product(req: ProductModel):
     try:
         cursor.execute("""
             INSERT INTO products (flavor_name, sale_price, yield_per_batch) 
-            VALUES (?, ?, ?)
+            VALUES (%s, %s, %s)
         """, (req.flavor_name, req.sale_price, req.yield_per_batch))
         conn.commit()
         return {"success": True}
@@ -239,7 +239,7 @@ def get_recipe(product_id: int):
         SELECT i.id, i.name, pi.quantity_per_batch, i.last_unit_cost
         FROM product_ingredients pi
         JOIN ingredients i ON pi.ingredient_id = i.id
-        WHERE pi.product_id = ?
+        WHERE pi.product_id = %s
     """, (product_id,))
     items = cursor.fetchall()
     conn.close()
@@ -251,16 +251,16 @@ def save_recipe(req: RecipeRequest):
     cursor = conn.cursor()
     try:
         # Update yield in products table
-        cursor.execute("UPDATE products SET yield_per_batch = ? WHERE id = ?", (req.yield_per_batch, req.product_id))
+        cursor.execute("UPDATE products SET yield_per_batch = %s WHERE id = %s", (req.yield_per_batch, req.product_id))
         
         # Clear old recipe
-        cursor.execute("DELETE FROM product_ingredients WHERE product_id = ?", (req.product_id,))
+        cursor.execute("DELETE FROM product_ingredients WHERE product_id = %s", (req.product_id,))
         
         # Insert new items
         for item in req.items:
             cursor.execute("""
                 INSERT INTO product_ingredients (product_id, ingredient_id, quantity_per_batch)
-                VALUES (?, ?, ?)
+                VALUES (%s, %s, %s)
             """, (req.product_id, item.ingredient_id, item.quantity))
         
         # Recalculate GPU immediately

@@ -366,6 +366,35 @@ async function deleteProvider(id) {
     }
 }
 
+document.getElementById('provider-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const payload = {
+        name: document.getElementById('prov-name').value,
+        category_name: document.getElementById('prov-cat').value,
+        phone: document.getElementById('prov-phone').value,
+        location: document.getElementById('prov-location').value,
+        delivery_time: document.getElementById('prov-delivery').value,
+        observations: document.getElementById('prov-obs').value
+    };
+    try {
+        const res = await fetch(`${API_URL}/providers`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const msg = document.getElementById('prov-msg');
+        if (res.ok) {
+            msg.className = 'success-msg';
+            msg.textContent = 'Proveedor guardado correctamente';
+            e.target.reset();
+            loadProviders();
+        } else {
+            msg.className = 'error-msg';
+            msg.textContent = 'Error al guardar el proveedor';
+        }
+    } catch (err) {}
+});
+
 // Expenses
 const expenseItemsContainer = document.getElementById('expense-items-container');
 const expTotalDisplay = document.getElementById('exp-total-display');

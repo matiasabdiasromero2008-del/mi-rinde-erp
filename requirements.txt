@@ -6,6 +6,9 @@ openpyxl
 firebase-admin
 fastapi
 uvicorn
-pydantic
+jinja2
 python-multipart
+pydantic
+bcrypt
+psycopg2-binary
 gunicorn
