@@ -184,6 +184,25 @@
 
                         </form>
                     </div>
+
+                    <div class="card glass mt-4">
+                        <h3>Historial de Gastos</h3>
+                        <div class="table-container" style="overflow-x: auto;">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Fecha</th>
+                                        <th>Proveedor</th>
+                                        <th>Categoría</th>
+                                        <th>Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="expenses-history-tbody">
+                                    <!-- Data injected via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </section>
 
                 <!-- Admin: Escandallos (La Planilla Maestra) -->
@@ -282,6 +301,10 @@
                                 <div class="input-group">
                                     <label>Cantidad</label>
                                     <input type="number" id="sale-qty" required>
+                                </div>
+                                <div class="input-group">
+                                    <label>Fecha</label>
+                                    <input type="date" id="sale-date">
                                 </div>
                             </div>
                             <button type="submit" class="btn primary">Confirmar Venta</button>

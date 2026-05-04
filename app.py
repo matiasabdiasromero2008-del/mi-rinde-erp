@@ -142,6 +142,21 @@ def get_metrics(month: str = None):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/expenses")
+def get_expenses():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT e.id, e.provider, c.name, e.date, e.total_amount
+        FROM expenses e
+        JOIN categories c ON e.category_id = c.id
+        ORDER BY e.date DESC, e.id DESC
+        LIMIT 50
+    """)
+    results = cursor.fetchall()
+    conn.close()
+    return [{"id": r[0], "provider": r[1], "category": r[2], "date": str(r[3]), "amount": r[4]} for r in results]
+
 @app.post("/expenses")
 def create_expense(req: ExpenseRequest):
     date_str = req.date if req.date else datetime.now().strftime("%Y-%m-%d")

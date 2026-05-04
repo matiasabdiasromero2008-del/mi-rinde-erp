@@ -47,9 +47,17 @@ function switchView(viewId) {
     document.getElementById(viewId).classList.add('active');
 }
 
+function setDefaultDate(id) {
+    const el = document.getElementById(id);
+    if (el && !el.value) {
+        el.value = new Date().toISOString().split('T')[0];
+    }
+}
+
 function switchSection(secId, title) {
     sections.forEach(s => s.classList.remove('active'));
-    document.getElementById(secId).classList.add('active');
+    const target = document.getElementById(secId);
+    if (target) target.classList.add('active');
     viewTitle.textContent = title;
     
     if (secId === 'sec-performance') loadMetrics();
@@ -60,10 +68,13 @@ function switchSection(secId, title) {
     if (secId === 'sec-gastos') {
         loadCategories();
         loadProvidersDropdown();
+        loadExpensesHistory();
+        setDefaultDate('exp-date');
     }
     if (secId === 'sec-ventas') {
         loadProducts();
         loadStock();
+        setDefaultDate('sale-date');
     }
 }
 
@@ -287,67 +298,72 @@ function editEscandallo(id, name, price, yld) {
 document.getElementById('escandallo-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     
-    const sabor = document.getElementById('esc-sabor').value;
+    const sabor = document.getElementById('esc-sabor').value.trim();
     const price = parseFloat(document.getElementById('esc-sale-price').value);
     const yld = parseFloat(document.getElementById('esc-yield').value);
     
-    // 1. Ensure Product exists or update it
-    let productId = editingProductId;
-    if (!productId) {
-        // Simple search in cached products or just try to create
-        const resP = await fetch(`${API_URL}/products`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ flavor_name: sabor, sale_price: price, yield_per_batch: yld })
-        });
-        // We'll need to get the ID back. For simplicity, let's refresh products list
-        const products = await (await fetch(`${API_URL}/products`)).json();
-        productId = products.find(p => p.name === sabor)?.id;
-    } else {
-        // Update product yield and price (we need a PUT endpoint ideally, but let's re-save recipe)
-    }
-
-    // 2. Save Recipe
-    const items = [];
-    for (const row of document.querySelectorAll('.esc-row')) {
-        const name = row.querySelector('.esc-item-name').value;
-        const qty = parseFloat(row.querySelector('.esc-item-qty').value);
-        
-        // Ensure ingredient exists in DB to get an ID
-        let ing = allIngredients.find(i => i.name.toLowerCase() === name.toLowerCase());
-        if (!ing) {
-            await fetch(`${API_URL}/ingredients`, {
+    try {
+        // 1. Ensure Product exists or update it
+        let productId = editingProductId;
+        if (!productId) {
+            await fetch(`${API_URL}/products`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ name: name })
+                body: JSON.stringify({ flavor_name: sabor, sale_price: price, yield_per_batch: yld })
             });
-            await loadIngredientsCache();
-            ing = allIngredients.find(i => i.name.toLowerCase() === name.toLowerCase());
+            const products = await (await fetch(`${API_URL}/products`)).json();
+            productId = products.find(p => p.name.toLowerCase() === sabor.toLowerCase())?.id;
         }
-        
-        if (ing && qty) {
-            items.push({ ingredient_id: ing.id, quantity: qty });
+
+        if (!productId) throw new Error("No se pudo obtener el ID del producto");
+
+        // 2. Save Recipe
+        const items = [];
+        for (const row of document.querySelectorAll('.esc-row')) {
+            const name = row.querySelector('.esc-item-name').value.trim();
+            const qty = parseFloat(row.querySelector('.esc-item-qty').value);
+            
+            if (!name || isNaN(qty)) continue;
+
+            let ing = allIngredients.find(i => i.name.toLowerCase() === name.toLowerCase());
+            if (!ing) {
+                await fetch(`${API_URL}/ingredients`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ name: name })
+                });
+                await loadIngredientsCache();
+                ing = allIngredients.find(i => i.name.toLowerCase() === name.toLowerCase());
+            }
+            
+            if (ing) {
+                items.push({ ingredient_id: ing.id, quantity: qty });
+            }
         }
-    }
 
-    const res = await fetch(`${API_URL}/recipes`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            product_id: productId,
-            yield_per_batch: yld,
-            items: items
-        })
-    });
+        const res = await fetch(`${API_URL}/recipes`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                product_id: productId,
+                yield_per_batch: yld,
+                items: items
+            })
+        });
 
-    if (res.ok) {
-        document.getElementById('esc-msg').textContent = 'Escandallo guardado correctamente';
-        document.getElementById('esc-msg').className = 'success-msg';
-        e.target.reset();
-        escItemsContainer.innerHTML = '';
-        addEscRow();
-        editingProductId = null;
-        loadEscandalloTable();
+        if (res.ok) {
+            const msg = document.getElementById('esc-msg');
+            msg.textContent = 'Escandallo guardado correctamente';
+            msg.className = 'success-msg';
+            e.target.reset();
+            escItemsContainer.innerHTML = '';
+            addEscRow();
+            editingProductId = null;
+            loadEscandalloTable();
+        }
+    } catch (err) {
+        document.getElementById('esc-msg').textContent = "Error: " + err.message;
+        document.getElementById('esc-msg').className = 'error-msg';
     }
 });
 
@@ -409,6 +425,22 @@ document.getElementById('provider-form')?.addEventListener('submit', async (e) =
 // Expenses
 const expenseItemsContainer = document.getElementById('expense-items-container');
 const expTotalDisplay = document.getElementById('exp-total-display');
+
+async function loadExpensesHistory() {
+    const res = await fetch(`${API_URL}/expenses`);
+    const data = await res.json();
+    const tbody = document.getElementById('expenses-history-tbody');
+    if (tbody) {
+        tbody.innerHTML = data.map(e => `
+            <tr>
+                <td>${e.date}</td>
+                <td>${e.provider}</td>
+                <td>${e.category}</td>
+                <td>$${e.amount.toFixed(2)}</td>
+            </tr>
+        `).join('');
+    }
+}
 
 function calculateExpenseTotal() {
     let total = 0;
@@ -477,6 +509,8 @@ document.getElementById('expense-form')?.addEventListener('submit', async (e) =>
         e.target.reset();
         if (expTotalDisplay) expTotalDisplay.textContent = '0.00';
         loadMetrics();
+        loadExpensesHistory();
+        setDefaultDate('exp-date');
     }
 });
 
@@ -502,7 +536,8 @@ document.getElementById('sale-form')?.addEventListener('submit', async (e) => {
         items: [{
             product_id: parseInt(document.getElementById('sale-product').value),
             quantity: parseInt(document.getElementById('sale-qty').value)
-        }]
+        }],
+        date: document.getElementById('sale-date').value || null
     };
     const res = await fetch(`${API_URL}/sales`, {
         method: 'POST',
@@ -512,5 +547,6 @@ document.getElementById('sale-form')?.addEventListener('submit', async (e) => {
     if (res.ok) {
         e.target.reset();
         loadStock();
+        setDefaultDate('sale-date');
     }
 });
