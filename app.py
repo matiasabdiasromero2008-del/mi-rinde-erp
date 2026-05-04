@@ -155,7 +155,17 @@ def get_expenses():
     """)
     results = cursor.fetchall()
     conn.close()
-    return [{"id": r[0], "provider": r[1], "category": r[2], "date": str(r[3]), "amount": r[4]} for r in results]
+    # Format date to string with time
+    return [{"id": r[0], "provider": r[1], "category": r[2], "date": r[3].strftime("%Y-%m-%d %H:%M"), "amount": r[4]} for r in results]
+
+@app.get("/expenses/{expense_id}/items")
+def get_expense_items(expense_id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT description, quantity, unit_price, total_price FROM expense_items WHERE expense_id = %s", (expense_id,))
+    items = cursor.fetchall()
+    conn.close()
+    return [{"description": r[0], "quantity": r[1], "unit_price": r[2], "total_price": r[3]} for r in items]
 
 @app.post("/expenses")
 def create_expense(req: ExpenseRequest):
@@ -166,6 +176,17 @@ def create_expense(req: ExpenseRequest):
         return {"success": True, "message": "Expense registered"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@app.delete("/expenses/{expense_id}")
+def delete_expense(expense_id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    # Delete items first due to foreign key
+    cursor.execute("DELETE FROM expense_items WHERE expense_id = %s", (expense_id,))
+    cursor.execute("DELETE FROM expenses WHERE id = %s", (expense_id,))
+    conn.commit()
+    conn.close()
+    return {"success": True}
 
 @app.get("/providers")
 def get_providers():
@@ -245,6 +266,19 @@ def add_product(req: ProductModel):
         return {"success": True}
     except Exception as e: raise HTTPException(status_code=400, detail=str(e))
     finally: conn.close()
+
+@app.delete("/products/{product_id}")
+def delete_product(product_id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    # Delete related product_ingredients first
+    cursor.execute("DELETE FROM product_ingredients WHERE product_id = %s", (product_id,))
+    # Delete related stock
+    cursor.execute("DELETE FROM stock WHERE product_id = %s", (product_id,))
+    cursor.execute("DELETE FROM products WHERE id = %s", (product_id,))
+    conn.commit()
+    conn.close()
+    return {"success": True}
 
 @app.get("/recipes/{product_id}")
 def get_recipe(product_id: int):

@@ -117,7 +117,7 @@ async function loadEscandalloTable() {
         const ingredients = await resRec.json();
         
         if (ingredients.length === 0) {
-            tbody.innerHTML += `<tr class="group-header"><td><strong>${prod.name}</strong></td><td colspan="5" class="text-muted italic">Sin receta</td><td>$${prod.gpu.toFixed(2)}</td><td><button class="btn secondary outline" onclick="editProduct(${prod.id}, '${prod.name}', ${prod.price}, ${prod.yield})">EDITAR</button></td></tr>`;
+            tbody.innerHTML += `<tr class="group-header"><td><strong>${prod.name}</strong></td><td colspan="5" class="text-muted italic">Sin receta</td><td>$${prod.gpu.toFixed(2)}</td><td><button class="btn secondary outline" style="padding:4px 8px; font-size:1.2rem; border:none;" onclick="editProduct(${prod.id}, '${prod.name}', ${prod.price}, ${prod.yield})" title="Editar">✏️</button> <button class="btn secondary outline" style="padding:4px 8px; font-size:1.2rem; border:none;" onclick="deleteProduct(${prod.id})" title="Eliminar">🗑️</button></td></tr>`;
             continue;
         }
 
@@ -132,7 +132,7 @@ async function loadEscandalloTable() {
                     <td>$${ing.cost.toFixed(2)}</td>
                     <td>$${totalCost.toFixed(2)}</td>
                     <td>${index === 0 ? `<strong>$${prod.gpu.toFixed(2)}</strong>` : ''}</td>
-                    <td>${index === 0 ? `<button class="btn secondary outline" style="padding:2px 8px;" onclick="editProduct(${prod.id}, '${prod.name}', ${prod.price}, ${prod.yield})">EDITAR</button>` : ''}</td>
+                    <td>${index === 0 ? `<button class="btn secondary outline" style="padding:4px 8px; font-size:1.2rem; border:none;" onclick="editProduct(${prod.id}, '${prod.name}', ${prod.price}, ${prod.yield})" title="Editar">✏️</button> <button class="btn secondary outline" style="padding:4px 8px; font-size:1.2rem; border:none;" onclick="deleteProduct(${prod.id})" title="Eliminar">🗑️</button>` : ''}</td>
                 </tr>`;
         });
     }
@@ -240,6 +240,17 @@ document.getElementById('escandallo-form').addEventListener('submit', async (e) 
     }
 });
 
+async function deleteProduct(id) {
+    if (confirm('¿ELIMINAR ESTE PRODUCTO? ESTO BORRARÁ SU RECETA Y STOCK.')) {
+        await fetch(`${API_URL}/products/${id}`, { method: 'DELETE' });
+        loadEscandalloTable();
+        if (editingProductId === id) {
+            document.getElementById('escandallo-form').reset();
+            editingProductId = null;
+        }
+    }
+}
+
 // --- GASTOS ---
 async function loadProvidersDropdown() {
     const res = await fetch(`${API_URL}/providers`);
@@ -317,20 +328,38 @@ async function loadExpensesHistory() {
             <td>${e.provider.toUpperCase()}</td>
             <td>${e.category}</td>
             <td>$${e.amount.toFixed(2)}</td>
-            <td><button class="btn secondary outline" style="padding:2px 8px" onclick="viewExpenseDetail(${e.id})">VER</button></td>
+            <td>
+                <button class="btn secondary outline" style="padding:4px 8px; font-size:1.2rem; border:none;" onclick="viewExpenseDetail(${e.id})" title="Ver Detalles">👁️</button>
+                <button class="btn secondary outline" style="padding:4px 8px; font-size:1.2rem; border:none;" onclick="deleteExpense(${e.id})" title="Eliminar">🗑️</button>
+            </td>
         </tr>`).join('');
 }
 
 async function viewExpenseDetail(id) {
-    const res = await fetch(`${API_URL}/expenses/${id}/items`);
-    const items = await res.json();
-    const body = document.getElementById('modal-body');
-    body.innerHTML = `
-        <table class="data-table">
-            <thead><tr><th>ITEM</th><th>CANT.</th><th>PRECIO</th><th>TOTAL</th></tr></thead>
-            <tbody>${items.map(i => `<tr><td>${i.description}</td><td>${i.quantity}</td><td>$${i.unit_price}</td><td>$${i.total_price}</td></tr>`).join('')}</tbody>
-        </table>`;
-    document.getElementById('detail-modal').style.display = 'block';
+    try {
+        const res = await fetch(`${API_URL}/expenses/${id}/items`);
+        const items = await res.json();
+        const body = document.getElementById('modal-body');
+        body.innerHTML = `
+            <div style="margin-bottom: 15px; color: var(--text-muted); font-size: 0.9rem;">
+                <em>Para modificar este gasto, por favor elimínelo y vuelva a registrarlo.</em>
+            </div>
+            <table class="data-table">
+                <thead><tr><th>ITEM</th><th>CANT.</th><th>PRECIO</th><th>TOTAL</th></tr></thead>
+                <tbody>${items.map(i => `<tr><td>${i.description}</td><td>${i.quantity}</td><td>$${i.unit_price}</td><td>$${i.total_price.toFixed(2)}</td></tr>`).join('')}</tbody>
+            </table>`;
+        document.getElementById('detail-modal').style.display = 'block';
+    } catch (err) {
+        alert("Error al cargar detalles del gasto.");
+    }
+}
+
+async function deleteExpense(id) {
+    if (confirm('¿ELIMINAR ESTE GASTO? ESTO NO SE PUEDE DESHACER.')) {
+        await fetch(`${API_URL}/expenses/${id}`, { method: 'DELETE' });
+        loadExpensesHistory();
+        loadMetrics();
+    }
 }
 
 // Helpers
@@ -361,7 +390,7 @@ async function loadCategories() {
 async function loadProviders() {
     const res = await fetch(`${API_URL}/providers`);
     allProviders = await res.json();
-    document.getElementById('providers-tbody').innerHTML = allProviders.map(p => `<tr><td>${p.name.toUpperCase()}</td><td>${p.category}</td><td><button class="btn secondary outline" onclick="deleteProvider(${p.id})">ELIMINAR</button></td></tr>`).join('');
+    document.getElementById('providers-tbody').innerHTML = allProviders.map(p => `<tr><td>${p.name.toUpperCase()}</td><td>${p.category}</td><td><button class="btn secondary outline" style="padding:4px 8px; font-size:1.2rem; border:none;" onclick="deleteProvider(${p.id})" title="Eliminar">🗑️</button></td></tr>`).join('');
 }
 
 async function deleteProvider(id) {

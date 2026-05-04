@@ -67,7 +67,7 @@ def init_db():
         id SERIAL PRIMARY KEY,
         provider TEXT,
         category_id INTEGER,
-        date DATE,
+        date TIMESTAMP,
         total_amount REAL,
         FOREIGN KEY (category_id) REFERENCES categories(id)
     )
@@ -105,7 +105,7 @@ def init_db():
     CREATE TABLE IF NOT EXISTS sales (
         id SERIAL PRIMARY KEY,
         client_name TEXT,
-        date DATE,
+        date TIMESTAMP,
         discount REAL DEFAULT 0,
         total_income REAL,
         total_gpu_snapshot REAL,
