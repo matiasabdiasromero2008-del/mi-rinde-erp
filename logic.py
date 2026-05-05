@@ -72,10 +72,13 @@ def add_expense(provider, category_name, items_list, date_str):
             VALUES (%s, %s, %s, %s, %s)
         ''', (expense_id, item['description'], item['quantity'], item['unit_price'], item['quantity'] * item['unit_price']))
         
-        # If it's an Insumo, update the ingredient cost
+        # If it's an Insumo, update or create the ingredient
         if category_name == "INSUMOS":
-            cursor.execute("UPDATE ingredients SET last_unit_cost = %s WHERE name = %s", 
-                           (item['unit_price'], item['description']))
+            cursor.execute('''
+                INSERT INTO ingredients (name, last_unit_cost)
+                VALUES (%s, %s)
+                ON CONFLICT (name) DO UPDATE SET last_unit_cost = EXCLUDED.last_unit_cost
+            ''', (item['description'], item['unit_price']))
     
     conn.commit()
     

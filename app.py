@@ -342,10 +342,10 @@ def get_stock():
 def get_products():
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, flavor_name, sale_price, current_gpu FROM products")
+    cursor.execute("SELECT id, flavor_name, sale_price, current_gpu, yield_per_batch FROM products")
     results = cursor.fetchall()
     conn.close()
-    return [{"id": r[0], "name": r[1], "price": r[2], "gpu": r[3]} for r in results]
+    return [{"id": r[0], "name": r[1], "price": r[2], "gpu": r[3], "yield": r[4]} for r in results]
 
 @app.get("/categories")
 def get_categories():

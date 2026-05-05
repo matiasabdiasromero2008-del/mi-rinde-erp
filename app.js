@@ -117,7 +117,7 @@ async function loadEscandalloTable() {
         const ingredients = await resRec.json();
         
         if (ingredients.length === 0) {
-            tbody.innerHTML += `<tr class="group-header"><td><strong>${prod.name}</strong></td><td colspan="5" class="text-muted italic">Sin receta</td><td>$${prod.gpu.toFixed(2)}</td><td><button class="btn secondary outline" style="padding:4px 8px; font-size:1.2rem; border:none;" onclick="editProduct(${prod.id}, '${prod.name}', ${prod.price}, ${prod.yield})" title="Editar">✏️</button> <button class="btn secondary outline" style="padding:4px 8px; font-size:1.2rem; border:none;" onclick="deleteProduct(${prod.id})" title="Eliminar">🗑️</button></td></tr>`;
+            tbody.innerHTML += `<tr class="group-header"><td><strong>${prod.name}</strong></td><td colspan="5" class="text-muted italic">Sin receta</td><td>$${prod.gpu.toFixed(2)}</td><td><button class="btn secondary outline" style="padding:4px 8px; font-size:1.2rem; border:none; display:inline-flex; align-items:center;" onclick="editProduct(${prod.id}, '${prod.name}', ${prod.price}, ${prod.yield})" title="Editar"><span class="material-symbols-outlined" style="font-size:1.2rem;">edit</span></button> <button class="btn secondary outline" style="padding:4px 8px; font-size:1.2rem; border:none; display:inline-flex; align-items:center;" onclick="deleteProduct(${prod.id})" title="Eliminar"><span class="material-symbols-outlined" style="font-size:1.2rem;">delete</span></button></td></tr>`;
             continue;
         }
 
@@ -132,7 +132,7 @@ async function loadEscandalloTable() {
                     <td>$${ing.cost.toFixed(2)}</td>
                     <td>$${totalCost.toFixed(2)}</td>
                     <td>${index === 0 ? `<strong>$${prod.gpu.toFixed(2)}</strong>` : ''}</td>
-                    <td>${index === 0 ? `<button class="btn secondary outline" style="padding:4px 8px; font-size:1.2rem; border:none;" onclick="editProduct(${prod.id}, '${prod.name}', ${prod.price}, ${prod.yield})" title="Editar">✏️</button> <button class="btn secondary outline" style="padding:4px 8px; font-size:1.2rem; border:none;" onclick="deleteProduct(${prod.id})" title="Eliminar">🗑️</button>` : ''}</td>
+                    <td>${index === 0 ? `<button class="btn secondary outline" style="padding:4px 8px; font-size:1.2rem; border:none; display:inline-flex; align-items:center;" onclick="editProduct(${prod.id}, '${prod.name}', ${prod.price}, ${prod.yield})" title="Editar"><span class="material-symbols-outlined" style="font-size:1.2rem;">edit</span></button> <button class="btn secondary outline" style="padding:4px 8px; font-size:1.2rem; border:none; display:inline-flex; align-items:center;" onclick="deleteProduct(${prod.id})" title="Eliminar"><span class="material-symbols-outlined" style="font-size:1.2rem;">delete</span></button>` : ''}</td>
                 </tr>`;
         });
     }
@@ -328,9 +328,9 @@ async function loadExpensesHistory() {
             <td>${e.provider.toUpperCase()}</td>
             <td>${e.category}</td>
             <td>$${e.amount.toFixed(2)}</td>
-            <td>
-                <button class="btn secondary outline" style="padding:4px 8px; font-size:1.2rem; border:none;" onclick="viewExpenseDetail(${e.id})" title="Ver Detalles">👁️</button>
-                <button class="btn secondary outline" style="padding:4px 8px; font-size:1.2rem; border:none;" onclick="deleteExpense(${e.id})" title="Eliminar">🗑️</button>
+            <td style="white-space: nowrap;">
+                <button class="btn secondary outline" style="padding:4px 8px; font-size:1.2rem; border:none; display:inline-flex; align-items:center;" onclick="viewExpenseDetail(${e.id})" title="Ver Detalles"><span class="material-symbols-outlined" style="font-size:1.2rem;">visibility</span></button>
+                <button class="btn secondary outline" style="padding:4px 8px; font-size:1.2rem; border:none; display:inline-flex; align-items:center;" onclick="deleteExpense(${e.id})" title="Eliminar"><span class="material-symbols-outlined" style="font-size:1.2rem;">delete</span></button>
             </td>
         </tr>`).join('');
 }
@@ -390,7 +390,7 @@ async function loadCategories() {
 async function loadProviders() {
     const res = await fetch(`${API_URL}/providers`);
     allProviders = await res.json();
-    document.getElementById('providers-tbody').innerHTML = allProviders.map(p => `<tr><td>${p.name.toUpperCase()}</td><td>${p.category}</td><td><button class="btn secondary outline" style="padding:4px 8px; font-size:1.2rem; border:none;" onclick="deleteProvider(${p.id})" title="Eliminar">🗑️</button></td></tr>`).join('');
+    document.getElementById('providers-tbody').innerHTML = allProviders.map(p => `<tr><td>${p.name.toUpperCase()}</td><td>${p.category}</td><td><button class="btn secondary outline" style="padding:4px 8px; font-size:1.2rem; border:none; display:inline-flex; align-items:center;" onclick="deleteProvider(${p.id})" title="Eliminar"><span class="material-symbols-outlined" style="font-size:1.2rem;">delete</span></button></td></tr>`).join('');
 }
 
 async function deleteProvider(id) {
