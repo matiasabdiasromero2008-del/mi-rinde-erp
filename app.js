@@ -71,22 +71,22 @@ function setupDashboard() {
     nav.innerHTML = '';
     
     if (currentUser.role === 'Admin') {
-        addNavLink('PERFORMANCE', 'sec-performance', true);
-        addNavLink('PROVEEDORES', 'sec-proveedores');
-        addNavLink('PRODUCTOS', 'sec-escandallos');
-        addNavLink('GASTOS', 'sec-gastos');
+        addNavLink('donut_small', 'PERFORMANCE', 'sec-performance', true);
+        addNavLink('local_shipping', 'PROVEEDORES', 'sec-proveedores');
+        addNavLink('inventory_2', 'PRODUCTOS', 'sec-escandallos');
+        addNavLink('receipt_long', 'GASTOS', 'sec-gastos');
         switchSection('sec-performance', 'PERFORMANCE');
     } else {
-        addNavLink('VENTAS Y STOCK', 'sec-ventas', true);
+        addNavLink('point_of_sale', 'VENTAS Y STOCK', 'sec-ventas', true);
         switchSection('sec-ventas', 'VENTAS Y STOCK');
     }
 }
 
-function addNavLink(text, secId, isActive = false) {
+function addNavLink(icon, text, secId, isActive = false) {
     const li = document.createElement('li');
     const a = document.createElement('a');
     a.href = '#';
-    a.textContent = text;
+    a.innerHTML = `<span class="material-symbols-outlined">${icon}</span> ${text}`;
     if (isActive) a.classList.add('active');
     a.addEventListener('click', (e) => {
         e.preventDefault();
@@ -98,12 +98,12 @@ function addNavLink(text, secId, isActive = false) {
     document.getElementById('nav-links').appendChild(li);
 }
 
-// --- PRODUCTOS (Ex Escandallo) ---
+// --- PRODUCTOS ---
 async function loadIngredientsCache() {
     const res = await fetch(`${API_URL}/ingredients`);
     allIngredients = await res.json();
     const dl = document.getElementById('ingredients-list');
-    dl.innerHTML = allIngredients.map(i => `<option value="${i.name}">`).join('');
+    if (dl) dl.innerHTML = allIngredients.map(i => `<option value="${i.name}">`).join('');
 }
 
 async function loadEscandalloTable() {
@@ -116,26 +116,53 @@ async function loadEscandalloTable() {
         const resRec = await fetch(`${API_URL}/recipes/${prod.id}`);
         const ingredients = await resRec.json();
         
-        if (ingredients.length === 0) {
-            tbody.innerHTML += `<tr class="group-header"><td><strong>${prod.name}</strong></td><td colspan="5" class="text-muted italic">Sin receta</td><td>$${prod.gpu.toFixed(2)}</td><td><button class="btn secondary outline" style="padding:4px 8px; font-size:1.2rem; border:none; display:inline-flex; align-items:center;" onclick="editProduct(${prod.id}, '${prod.name}', ${prod.price}, ${prod.yield})" title="Editar"><span class="material-symbols-outlined" style="font-size:1.2rem;">edit</span></button> <button class="btn secondary outline" style="padding:4px 8px; font-size:1.2rem; border:none; display:inline-flex; align-items:center;" onclick="deleteProduct(${prod.id})" title="Eliminar"><span class="material-symbols-outlined" style="font-size:1.2rem;">delete</span></button></td></tr>`;
-            continue;
+        let ingredientsHtml = '';
+        if (ingredients.length > 0) {
+            ingredientsHtml = ingredients.map(ing => {
+                const totalCost = ing.quantity * ing.cost;
+                return `
+                    <tr class="ingredient-row row-prod-${prod.id}">
+                        <td></td>
+                        <td style="padding-left: 30px; color: var(--text-muted);"><span class="material-symbols-outlined" style="font-size:1rem; vertical-align:middle;">subdirectory_arrow_right</span> ${ing.name}</td>
+                        <td colspan="2" class="text-muted">Cant: ${ing.quantity}</td>
+                        <td colspan="2" class="text-muted">$${totalCost.toFixed(2)}</td>
+                    </tr>
+                `;
+            }).join('');
         }
 
-        ingredients.forEach((ing, index) => {
-            const totalCost = ing.quantity * ing.cost;
-            tbody.innerHTML += `
-                <tr class="${index === 0 ? 'group-header' : ''}">
-                    <td>${index === 0 ? `<strong>${prod.name}</strong>` : ''}</td>
-                    <td>${ing.name}</td>
-                    <td>${ing.quantity}</td>
-                    <td>${index === 0 ? prod.yield : ''}</td>
-                    <td>$${ing.cost.toFixed(2)}</td>
-                    <td>$${totalCost.toFixed(2)}</td>
-                    <td>${index === 0 ? `<strong>$${prod.gpu.toFixed(2)}</strong>` : ''}</td>
-                    <td>${index === 0 ? `<button class="btn secondary outline" style="padding:4px 8px; font-size:1.2rem; border:none; display:inline-flex; align-items:center;" onclick="editProduct(${prod.id}, '${prod.name}', ${prod.price}, ${prod.yield})" title="Editar"><span class="material-symbols-outlined" style="font-size:1.2rem;">edit</span></button> <button class="btn secondary outline" style="padding:4px 8px; font-size:1.2rem; border:none; display:inline-flex; align-items:center;" onclick="deleteProduct(${prod.id})" title="Eliminar"><span class="material-symbols-outlined" style="font-size:1.2rem;">delete</span></button>` : ''}</td>
-                </tr>`;
-        });
+        tbody.innerHTML += `
+            <tr class="group-header">
+                <td style="text-align: center;">
+                    ${ingredients.length > 0 ? `<span class="material-symbols-outlined toggle-btn" onclick="toggleIngredients(${prod.id}, this)">expand_more</span>` : ''}
+                </td>
+                <td><strong>${prod.name}</strong></td>
+                <td>${prod.yield || 1}</td>
+                <td>$${prod.price.toFixed(2)}</td>
+                <td><strong style="color: var(--primary);">$${prod.gpu.toFixed(2)}</strong></td>
+                <td style="white-space: nowrap;">
+                    <button class="btn secondary outline btn-icon" onclick="editProduct(${prod.id}, '${prod.name}', ${prod.price}, ${prod.yield || 1})" title="Editar"><span class="material-symbols-outlined">edit</span></button>
+                    <button class="btn secondary outline btn-icon" onclick="deleteProduct(${prod.id})" title="Eliminar"><span class="material-symbols-outlined">delete</span></button>
+                </td>
+            </tr>
+            ${ingredientsHtml}
+        `;
     }
+}
+
+function toggleIngredients(prodId, iconEl) {
+    const rows = document.querySelectorAll(`.row-prod-${prodId}`);
+    let isHidden = true;
+    rows.forEach(row => {
+        if (row.classList.contains('show')) {
+            row.classList.remove('show');
+            isHidden = true;
+        } else {
+            row.classList.add('show');
+            isHidden = false;
+        }
+    });
+    iconEl.textContent = isHidden ? 'expand_more' : 'expand_less';
 }
 
 const escItemsContainer = document.getElementById('esc-items-container');
@@ -149,17 +176,20 @@ function addEscRow(name = '', qty = '') {
         <input type="text" class="esc-item-name" placeholder="Insumo" required list="ingredients-list" value="${name}">
         <input type="number" step="0.01" class="esc-item-qty" placeholder="Cant." required value="${qty}">
         <input type="text" class="esc-item-cost" readonly disabled style="background: rgba(0,0,0,0.2);" value="${cost}">
-        <button type="button" class="btn secondary outline remove-esc-item">&times;</button>`;
+        <button type="button" class="btn secondary outline remove-esc-item btn-icon"><span class="material-symbols-outlined">close</span></button>`;
     escItemsContainer.appendChild(row);
 }
 
 document.getElementById('esc-add-item-btn').addEventListener('click', () => addEscRow());
+
 escItemsContainer.addEventListener('click', (e) => {
-    if (e.target.closest('.remove-esc-item')) {
-        e.target.closest('.esc-row').remove();
+    const removeBtn = e.target.closest('.remove-esc-item');
+    if (removeBtn) {
+        removeBtn.closest('.esc-row').remove();
         updateEscTotals();
     }
 });
+
 escItemsContainer.addEventListener('input', (e) => {
     if (e.target.classList.contains('esc-item-name') || e.target.classList.contains('esc-item-qty')) {
         const row = e.target.closest('.esc-row');
@@ -187,6 +217,9 @@ function editProduct(id, name, price, yld) {
     document.getElementById('esc-sale-price').value = price;
     document.getElementById('esc-yield').value = yld;
     escItemsContainer.innerHTML = '';
+    
+    document.getElementById('cancel-edit-product-btn').style.display = 'inline-flex';
+    
     fetch(`${API_URL}/recipes/${id}`).then(res => res.json()).then(items => {
         items.forEach(item => addEscRow(item.name, item.quantity));
         if (items.length === 0) addEscRow();
@@ -194,6 +227,15 @@ function editProduct(id, name, price, yld) {
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
+document.getElementById('cancel-edit-product-btn').addEventListener('click', () => {
+    editingProductId = null;
+    document.getElementById('escandallo-form').reset();
+    escItemsContainer.innerHTML = '';
+    addEscRow();
+    updateEscTotals();
+    document.getElementById('cancel-edit-product-btn').style.display = 'none';
+});
 
 document.getElementById('escandallo-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -247,8 +289,12 @@ document.getElementById('escandallo-form').addEventListener('submit', async (e) 
         escItemsContainer.innerHTML = '';
         addEscRow();
         editingProductId = null;
+        document.getElementById('cancel-edit-product-btn').style.display = 'none';
         loadEscandalloTable();
-        document.getElementById('esc-msg').textContent = "PRODUCTO GUARDADO";
+        const msg = document.getElementById('esc-msg');
+        msg.textContent = "PRODUCTO GUARDADO EXITOSAMENTE";
+        msg.className = "success-msg";
+        setTimeout(() => msg.textContent = '', 3000);
     }
 });
 
@@ -261,40 +307,83 @@ async function deleteProduct(id) {
         } else {
             loadEscandalloTable();
             if (editingProductId === id) {
-                document.getElementById('escandallo-form').reset();
-                editingProductId = null;
+                document.getElementById('cancel-edit-product-btn').click();
             }
         }
     }
 }
 
-// --- GASTOS ---
+// --- PROVEEDORES ---
 async function loadProvidersDropdown() {
     const res = await fetch(`${API_URL}/providers`);
     allProviders = await res.json();
     document.getElementById('exp-prov').innerHTML = '<option value="">PROVEEDOR...</option>' + allProviders.map(p => `<option value="${p.name}">${p.name.toUpperCase()}</option>`).join('');
 }
 
+document.getElementById('provider-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const payload = {
+        name: document.getElementById('prov-name').value.toUpperCase(),
+        category_name: document.getElementById('prov-cat').value,
+        phone: null, location: null, delivery_time: null, observations: null
+    };
+    try {
+        const res = await fetch(`${API_URL}/providers`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const msg = document.getElementById('prov-msg');
+        if (res.ok) {
+            msg.className = 'success-msg';
+            msg.textContent = 'PROVEEDOR GUARDADO';
+            e.target.reset();
+            loadProviders();
+            setTimeout(() => msg.textContent = '', 3000);
+        } else {
+            msg.className = 'error-msg';
+            msg.textContent = 'ERROR AL GUARDAR';
+        }
+    } catch (err) {}
+});
+
+
+// --- GASTOS ---
 document.getElementById('exp-prov')?.addEventListener('change', (e) => {
     const p = allProviders.find(prov => prov.name === e.target.value);
     document.getElementById('exp-cat').value = p ? p.category : '';
 });
 
 const expenseItemsContainer = document.getElementById('expense-items-container');
-document.getElementById('add-item-btn').addEventListener('click', () => {
+function addExpenseRow(desc = '', qty = '', unit = '') {
     const row = document.createElement('div');
     row.className = 'expense-row';
     row.style.cssText = 'display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 40px; gap: 10px; margin-bottom: 10px;';
+    const sub = (parseFloat(qty) * parseFloat(unit)) || 0;
     row.innerHTML = `
-        <input type="text" class="exp-item-desc" placeholder="Producto/Insumo" required list="ingredients-list">
-        <input type="number" step="0.01" class="exp-item-qty" placeholder="Cant." required>
-        <input type="number" step="0.01" class="exp-item-unit" placeholder="$ Unit." required>
-        <input type="text" class="exp-item-subtotal" readonly disabled style="background: rgba(0,0,0,0.2);">
-        <button type="button" class="btn secondary outline remove-item-btn">&times;</button>`;
+        <input type="text" class="exp-item-desc" placeholder="Producto/Insumo" required list="ingredients-list" value="${desc}">
+        <input type="number" step="0.01" class="exp-item-qty" placeholder="Cant." required value="${qty}">
+        <input type="number" step="0.01" class="exp-item-unit" placeholder="$ Unit." required value="${unit}">
+        <input type="text" class="exp-item-subtotal" readonly disabled style="background: rgba(0,0,0,0.2);" value="${sub > 0 ? sub.toFixed(2) : ''}">
+        <button type="button" class="btn secondary outline remove-item-btn btn-icon"><span class="material-symbols-outlined">close</span></button>`;
     expenseItemsContainer.appendChild(row);
+}
+
+document.getElementById('add-item-btn').addEventListener('click', () => addExpenseRow());
+
+expenseItemsContainer.addEventListener('click', (e) => {
+    const removeBtn = e.target.closest('.remove-item-btn');
+    if (removeBtn) {
+        removeBtn.closest('.expense-row').remove();
+        calculateExpenseTotal();
+    }
 });
 
 expenseItemsContainer.addEventListener('input', () => {
+    calculateExpenseTotal();
+});
+
+function calculateExpenseTotal() {
     let total = 0;
     document.querySelectorAll('.expense-row').forEach(row => {
         const q = parseFloat(row.querySelector('.exp-item-qty').value) || 0;
@@ -304,35 +393,71 @@ expenseItemsContainer.addEventListener('input', () => {
         total += sub;
     });
     document.getElementById('exp-total-display').textContent = total.toFixed(2);
+}
+
+let editingExpenseId = null;
+
+document.getElementById('cancel-edit-expense-btn').addEventListener('click', () => {
+    editingExpenseId = null;
+    document.getElementById('expense-form').reset();
+    expenseItemsContainer.innerHTML = '';
+    addExpenseRow();
+    calculateExpenseTotal();
+    setDefaultDateTime('exp-date');
+    document.getElementById('cancel-edit-expense-btn').style.display = 'none';
 });
 
 document.getElementById('expense-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const items = [];
     document.querySelectorAll('.expense-row').forEach(row => {
+        const desc = row.querySelector('.exp-item-desc').value.trim().toUpperCase();
+        if(!desc) return;
         items.push({
-            description: row.querySelector('.exp-item-desc').value.trim(),
+            description: desc,
             quantity: parseFloat(row.querySelector('.exp-item-qty').value),
             unit_price: parseFloat(row.querySelector('.exp-item-unit').value)
         });
     });
-    const res = await fetch(`${API_URL}/expenses`, {
-        method: 'POST',
+    
+    const payload = {
+        provider: document.getElementById('exp-prov').value,
+        category_name: document.getElementById('exp-cat').value,
+        date: document.getElementById('exp-date').value,
+        items: items
+    };
+
+    let url = `${API_URL}/expenses`;
+    let method = 'POST';
+
+    if (editingExpenseId) {
+        url = `${API_URL}/expenses/${editingExpenseId}`;
+        method = 'PUT';
+    }
+
+    const res = await fetch(url, {
+        method: method,
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            provider: document.getElementById('exp-prov').value,
-            category_name: document.getElementById('exp-cat').value,
-            date: document.getElementById('exp-date').value,
-            items: items
-        })
+        body: JSON.stringify(payload)
     });
+
     if (res.ok) {
         e.target.reset();
         expenseItemsContainer.innerHTML = '';
+        addExpenseRow();
         document.getElementById('exp-total-display').textContent = '0.00';
         loadExpensesHistory();
         loadMetrics();
         setDefaultDateTime('exp-date');
+        
+        if (editingExpenseId) {
+            document.getElementById('cancel-edit-expense-btn').click();
+        }
+        
+        const msg = document.getElementById('exp-msg');
+        msg.textContent = "GASTO GUARDADO EXITOSAMENTE";
+        msg.className = "success-msg";
+        setTimeout(() => msg.textContent = '', 3000);
     }
 });
 
@@ -344,10 +469,11 @@ async function loadExpensesHistory() {
             <td>${e.date}</td>
             <td>${e.provider.toUpperCase()}</td>
             <td>${e.category}</td>
-            <td>$${e.amount.toFixed(2)}</td>
+            <td><strong style="color: var(--primary);">$${e.amount.toFixed(2)}</strong></td>
             <td style="white-space: nowrap;">
-                <button class="btn secondary outline" style="padding:4px 8px; font-size:1.2rem; border:none; display:inline-flex; align-items:center;" onclick="viewExpenseDetail(${e.id})" title="Ver Detalles"><span class="material-symbols-outlined" style="font-size:1.2rem;">visibility</span></button>
-                <button class="btn secondary outline" style="padding:4px 8px; font-size:1.2rem; border:none; display:inline-flex; align-items:center;" onclick="deleteExpense(${e.id})" title="Eliminar"><span class="material-symbols-outlined" style="font-size:1.2rem;">delete</span></button>
+                <button class="btn secondary outline btn-icon" onclick="viewExpenseDetail(${e.id})" title="Ver Detalles"><span class="material-symbols-outlined">visibility</span></button>
+                <button class="btn secondary outline btn-icon" onclick="editExpense(${e.id})" title="Editar"><span class="material-symbols-outlined">edit</span></button>
+                <button class="btn secondary outline btn-icon" onclick="deleteExpense(${e.id})" title="Eliminar"><span class="material-symbols-outlined">delete</span></button>
             </td>
         </tr>`).join('');
 }
@@ -358,9 +484,6 @@ async function viewExpenseDetail(id) {
         const items = await res.json();
         const body = document.getElementById('modal-body');
         body.innerHTML = `
-            <div style="margin-bottom: 15px; color: var(--text-muted); font-size: 0.9rem;">
-                <em>Para modificar este gasto, por favor elimínelo y vuelva a registrarlo.</em>
-            </div>
             <table class="data-table">
                 <thead><tr><th>ITEM</th><th>CANT.</th><th>PRECIO</th><th>TOTAL</th></tr></thead>
                 <tbody>${items.map(i => `<tr><td>${i.description}</td><td>${i.quantity}</td><td>$${i.unit_price}</td><td>$${i.total_price.toFixed(2)}</td></tr>`).join('')}</tbody>
@@ -371,11 +494,48 @@ async function viewExpenseDetail(id) {
     }
 }
 
+async function editExpense(id) {
+    try {
+        const resExp = await fetch(`${API_URL}/expenses`);
+        const allExp = await resExp.json();
+        const exp = allExp.find(e => e.id === id);
+        
+        if(!exp) return;
+        
+        editingExpenseId = id;
+        document.getElementById('exp-prov').value = exp.provider;
+        document.getElementById('exp-cat').value = exp.category;
+        
+        // Format date to local datetime-local
+        let dateVal = exp.date;
+        if(dateVal.length === 16) {
+            dateVal = dateVal.replace(' ', 'T');
+        }
+        document.getElementById('exp-date').value = dateVal;
+        
+        document.getElementById('cancel-edit-expense-btn').style.display = 'inline-flex';
+        expenseItemsContainer.innerHTML = '';
+        
+        const resItems = await fetch(`${API_URL}/expenses/${id}/items`);
+        const items = await resItems.json();
+        
+        items.forEach(i => addExpenseRow(i.description, i.quantity, i.unit_price));
+        calculateExpenseTotal();
+        
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err) {
+        alert("Error al cargar el gasto para edición.");
+    }
+}
+
 async function deleteExpense(id) {
     if (confirm('¿ELIMINAR ESTE GASTO? ESTO NO SE PUEDE DESHACER.')) {
         await fetch(`${API_URL}/expenses/${id}`, { method: 'DELETE' });
         loadExpensesHistory();
         loadMetrics();
+        if (editingExpenseId === id) {
+            document.getElementById('cancel-edit-expense-btn').click();
+        }
     }
 }
 
@@ -407,11 +567,11 @@ async function loadCategories() {
 async function loadProviders() {
     const res = await fetch(`${API_URL}/providers`);
     allProviders = await res.json();
-    document.getElementById('providers-tbody').innerHTML = allProviders.map(p => `<tr><td>${p.name.toUpperCase()}</td><td>${p.category}</td><td><button class="btn secondary outline" style="padding:4px 8px; font-size:1.2rem; border:none; display:inline-flex; align-items:center;" onclick="deleteProvider(${p.id})" title="Eliminar"><span class="material-symbols-outlined" style="font-size:1.2rem;">delete</span></button></td></tr>`).join('');
+    document.getElementById('providers-tbody').innerHTML = allProviders.map(p => `<tr><td>${p.name.toUpperCase()}</td><td>${p.category}</td><td style="white-space: nowrap;"><button class="btn secondary outline btn-icon" onclick="deleteProvider(${p.id})" title="Eliminar"><span class="material-symbols-outlined">delete</span></button></td></tr>`).join('');
 }
 
 async function deleteProvider(id) {
-    if (confirm('¿ELIMINAR?')) {
+    if (confirm('¿ELIMINAR ESTE PROVEEDOR?')) {
         await fetch(`${API_URL}/providers/${id}`, { method: 'DELETE' });
         loadProviders();
     }
@@ -420,14 +580,11 @@ async function deleteProvider(id) {
 async function loadProducts() {
     const res = await fetch(`${API_URL}/products`);
     const data = await res.json();
-    document.getElementById('sale-product').innerHTML = data.map(p => `<option value="${p.id}">${p.name.toUpperCase()} ($${p.price})</option>`).join('');
+    const el = document.getElementById('sale-product');
+    if (el) el.innerHTML = data.map(p => `<option value="${p.id}">${p.name.toUpperCase()} ($${p.price})</option>`).join('');
 }
 
-async function loadStock() {
-    const res = await fetch(`${API_URL}/stock`);
-    const data = await res.json();
-    // (No stock table in this view anymore or it's hidden)
-}
+async function loadStock() {}
 
 document.getElementById('sale-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();

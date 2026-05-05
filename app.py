@@ -188,6 +188,48 @@ def delete_expense(expense_id: int):
     conn.close()
     return {"success": True}
 
+@app.put("/expenses/{expense_id}")
+def update_expense(expense_id: int, req: ExpenseRequest):
+    date_str = req.date if req.date else datetime.now().strftime("%Y-%m-%d")
+    items_dict = [{"description": i.description, "quantity": i.quantity, "unit_price": i.unit_price} for i in req.items]
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # 1. Update main expense record
+        cursor.execute("SELECT id FROM categories WHERE name = %s", (req.category_name,))
+        cat_id = cursor.fetchone()[0]
+        
+        total_amount = sum(item['quantity'] * item['unit_price'] for item in items_dict)
+        
+        cursor.execute("""
+            UPDATE expenses 
+            SET provider = %s, category_id = %s, date = %s, total_amount = %s
+            WHERE id = %s
+        """, (req.provider, cat_id, date_str, total_amount, expense_id))
+        
+        # 2. Delete old items and insert new ones
+        cursor.execute("DELETE FROM expense_items WHERE expense_id = %s", (expense_id,))
+        for item in items_dict:
+            cursor.execute('''
+                INSERT INTO expense_items (expense_id, description, quantity, unit_price, total_price)
+                VALUES (%s, %s, %s, %s, %s)
+            ''', (expense_id, item['description'], item['quantity'], item['unit_price'], item['quantity'] * item['unit_price']))
+            
+            # Upsert ingredient
+            if req.category_name == "INSUMOS":
+                cursor.execute('''
+                    INSERT INTO ingredients (name, last_unit_cost)
+                    VALUES (%s, %s)
+                    ON CONFLICT (name) DO UPDATE SET last_unit_cost = EXCLUDED.last_unit_cost
+                ''', (item['description'], item['unit_price']))
+                
+        conn.commit()
+        conn.close()
+        return {"success": True, "message": "Expense updated"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 @app.get("/providers")
 def get_providers():
     conn = get_connection()
