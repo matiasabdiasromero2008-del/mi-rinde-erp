@@ -252,6 +252,56 @@
                     </div>
                 </section>
 
+                <!-- Admin: INGRESOS -->
+                <section id="sec-ingresos" class="section">
+                    <div class="card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h3 style="margin: 0;">REGISTRAR PRODUCCIÓN (INGRESOS)</h3>
+                            <button type="button" id="cancel-edit-prodrun-btn" class="btn secondary outline" style="display: none; padding: 6px 12px; font-size: 0.8rem;">
+                                <span class="material-symbols-outlined" style="font-size: 1rem;">close</span> CANCELAR EDICIÓN
+                            </button>
+                        </div>
+                        <form id="prodrun-form">
+                            <div class="form-row">
+                                <div class="input-group" style="flex: 2;">
+                                    <label>SABOR (PRODUCTO)</label>
+                                    <select id="prodrun-product" required></select>
+                                </div>
+                                <div class="input-group">
+                                    <label>UNIDADES (FRASCOS)</label>
+                                    <input type="number" id="prodrun-qty" required min="1">
+                                </div>
+                                <div class="input-group">
+                                    <label>FECHA Y HORA</label>
+                                    <input type="datetime-local" id="prodrun-date" required>
+                                </div>
+                            </div>
+                            <div style="display: flex; justify-content: flex-end; align-items: center; margin-top: 20px;">
+                                <button type="submit" class="btn primary" style="padding: 12px 40px;">
+                                    <span class="material-symbols-outlined">save</span> GUARDAR INGRESO
+                                </button>
+                            </div>
+                            <div id="prodrun-msg"></div>
+                        </form>
+                    </div>
+                    <div class="card mt-4">
+                        <h3>HISTORIAL DE INGRESOS (PRODUCCIÓN)</h3>
+                        <div class="table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>FECHA</th>
+                                        <th>SABOR</th>
+                                        <th>UNIDADES</th>
+                                        <th style="width: 100px;">ACCIONES</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="prodrun-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
                 <!-- Operator: VENTAS -->
                 <section id="sec-ventas" class="section">
                     <div class="card">

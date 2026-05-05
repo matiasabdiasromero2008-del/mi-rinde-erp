@@ -34,6 +34,11 @@ function switchSection(secId, title) {
         loadExpensesHistory();
         setDefaultDateTime('exp-date');
     }
+    if (secId === 'sec-ingresos') {
+        loadProductsDropdown('prodrun-product');
+        loadProductionHistory();
+        setDefaultDateTime('prodrun-date');
+    }
     if (secId === 'sec-ventas') {
         loadProducts();
         loadStock();
@@ -74,6 +79,7 @@ function setupDashboard() {
         addNavLink('donut_small', 'PERFORMANCE', 'sec-performance', true);
         addNavLink('local_shipping', 'PROVEEDORES', 'sec-proveedores');
         addNavLink('inventory_2', 'PRODUCTOS', 'sec-escandallos');
+        addNavLink('conveyor_belt', 'INGRESOS', 'sec-ingresos');
         addNavLink('receipt_long', 'GASTOS', 'sec-gastos');
         switchSection('sec-performance', 'PERFORMANCE');
     } else {
@@ -582,6 +588,103 @@ async function loadProducts() {
     const data = await res.json();
     const el = document.getElementById('sale-product');
     if (el) el.innerHTML = data.map(p => `<option value="${p.id}">${p.name.toUpperCase()} ($${p.price})</option>`).join('');
+}
+
+async function loadProductsDropdown(selectId) {
+    const res = await fetch(`${API_URL}/products`);
+    const data = await res.json();
+    const el = document.getElementById(selectId);
+    if (el) el.innerHTML = data.map(p => `<option value="${p.id}">${p.name.toUpperCase()}</option>`).join('');
+}
+
+// --- PRODUCCIÓN (INGRESOS) ---
+let editingProdRunId = null;
+
+async function loadProductionHistory() {
+    const res = await fetch(`${API_URL}/production`);
+    const data = await res.json();
+    document.getElementById('prodrun-tbody').innerHTML = data.map(pr => `
+        <tr>
+            <td>${pr.date.replace('T', ' ')}</td>
+            <td><strong>${pr.product_name}</strong></td>
+            <td>${pr.quantity}</td>
+            <td style="white-space: nowrap;">
+                <button class="btn secondary outline btn-icon" onclick="editProduction(${pr.id})" title="Editar"><span class="material-symbols-outlined">edit</span></button>
+                <button class="btn secondary outline btn-icon" onclick="deleteProduction(${pr.id})" title="Eliminar"><span class="material-symbols-outlined">delete</span></button>
+            </td>
+        </tr>`).join('');
+}
+
+document.getElementById('cancel-edit-prodrun-btn').addEventListener('click', () => {
+    editingProdRunId = null;
+    document.getElementById('prodrun-form').reset();
+    setDefaultDateTime('prodrun-date');
+    document.getElementById('cancel-edit-prodrun-btn').style.display = 'none';
+});
+
+document.getElementById('prodrun-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const payload = {
+        product_id: parseInt(document.getElementById('prodrun-product').value),
+        quantity: parseInt(document.getElementById('prodrun-qty').value),
+        date: document.getElementById('prodrun-date').value
+    };
+
+    let url = `${API_URL}/production`;
+    let method = 'POST';
+    if (editingProdRunId) {
+        url = `${API_URL}/production/${editingProdRunId}`;
+        method = 'PUT';
+    }
+
+    try {
+        const res = await fetch(url, {
+            method: method,
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        
+        const msg = document.getElementById('prodrun-msg');
+        if (res.ok) {
+            e.target.reset();
+            setDefaultDateTime('prodrun-date');
+            loadProductionHistory();
+            if (editingProdRunId) {
+                document.getElementById('cancel-edit-prodrun-btn').click();
+            }
+            msg.textContent = "INGRESO GUARDADO EXITOSAMENTE";
+            msg.className = "success-msg";
+            setTimeout(() => msg.textContent = '', 3000);
+        } else {
+            const err = await res.json();
+            msg.textContent = err.detail || "ERROR AL GUARDAR";
+            msg.className = "error-msg";
+        }
+    } catch (err) {}
+});
+
+async function editProduction(id) {
+    try {
+        const res = await fetch(`${API_URL}/production`);
+        const allPr = await res.json();
+        const pr = allPr.find(p => p.id === id);
+        if(!pr) return;
+        
+        editingProdRunId = id;
+        document.getElementById('prodrun-product').value = pr.product_id;
+        document.getElementById('prodrun-qty').value = pr.quantity;
+        document.getElementById('prodrun-date').value = pr.date;
+        
+        document.getElementById('cancel-edit-prodrun-btn').style.display = 'inline-flex';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch(err) {}
+}
+
+async function deleteProduction(id) {
+    if (confirm('¿ELIMINAR ESTE INGRESO? ESTO RESTARÁ UNIDADES DEL STOCK.')) {
+        await fetch(`${API_URL}/production/${id}`, { method: 'DELETE' });
+        loadProductionHistory();
+    }
 }
 
 async function loadStock() {}

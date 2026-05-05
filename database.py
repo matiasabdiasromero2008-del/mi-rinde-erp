@@ -127,6 +127,17 @@ def init_db():
     )
     ''')
 
+    # Production Runs (Ingresos)
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS production_runs (
+        id SERIAL PRIMARY KEY,
+        product_id INTEGER,
+        quantity INTEGER,
+        date TIMESTAMP,
+        FOREIGN KEY (product_id) REFERENCES products(id)
+    )
+    ''')
+
     # Stock
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS stock (

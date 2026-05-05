@@ -109,6 +109,11 @@ class RecipeRequest(BaseModel):
     yield_per_batch: float
     items: List[RecipeItem]
 
+class ProductionModel(BaseModel):
+    product_id: int
+    quantity: int
+    date: Optional[str] = None
+
 class SaleItemModel(BaseModel):
     product_id: int
     quantity: int
@@ -396,6 +401,118 @@ def create_sale(req: SaleRequest):
         logic.record_sale(req.client_name, items_dict, req.discount, date_str)
         return {"success": True, "message": "Sale registered"}
     except Exception as e: raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/metrics")
+def get_metrics():
+    return logic.get_performance_metrics()
+
+# --- PRODUCCIÓN (INGRESOS) ---
+@app.post("/production")
+def create_production(req: ProductionModel):
+    date_str = req.date if req.date else datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        # Insert into production_runs
+        cursor.execute("""
+            INSERT INTO production_runs (product_id, quantity, date)
+            VALUES (%s, %s, %s)
+        """, (req.product_id, req.quantity, date_str))
+        
+        # Update Stock
+        cursor.execute("""
+            INSERT INTO stock (product_id, quantity_remaining)
+            VALUES (%s, %s)
+            ON CONFLICT (product_id) DO UPDATE 
+            SET quantity_remaining = stock.quantity_remaining + EXCLUDED.quantity_remaining
+        """, (req.product_id, req.quantity))
+        
+        conn.commit()
+        return {"success": True}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+
+@app.get("/production")
+def get_production():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT pr.id, p.id, p.flavor_name, pr.quantity, pr.date
+        FROM production_runs pr
+        JOIN products p ON pr.product_id = p.id
+        ORDER BY pr.date DESC
+    """)
+    results = cursor.fetchall()
+    conn.close()
+    return [{"id": r[0], "product_id": r[1], "product_name": r[2], "quantity": r[3], "date": r[4].strftime("%Y-%m-%dT%H:%M")} for r in results]
+
+@app.delete("/production/{prod_id}")
+def delete_production(prod_id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT product_id, quantity FROM production_runs WHERE id = %s", (prod_id,))
+        row = cursor.fetchone()
+        if not row: raise Exception("Registro no encontrado")
+        p_id, qty = row
+        
+        # Reduce stock
+        cursor.execute("""
+            UPDATE stock SET quantity_remaining = quantity_remaining - %s
+            WHERE product_id = %s
+        """, (qty, p_id))
+        
+        cursor.execute("DELETE FROM production_runs WHERE id = %s", (prod_id,))
+        conn.commit()
+        return {"success": True}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+
+@app.put("/production/{prod_id}")
+def update_production(prod_id: int, req: ProductionModel):
+    date_str = req.date if req.date else datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT product_id, quantity FROM production_runs WHERE id = %s", (prod_id,))
+        row = cursor.fetchone()
+        if not row: raise Exception("Registro no encontrado")
+        old_p_id, old_qty = row
+        
+        # First, revert old stock
+        cursor.execute("""
+            UPDATE stock SET quantity_remaining = quantity_remaining - %s
+            WHERE product_id = %s
+        """, (old_qty, old_p_id))
+        
+        # Now, update production run
+        cursor.execute("""
+            UPDATE production_runs 
+            SET product_id = %s, quantity = %s, date = %s
+            WHERE id = %s
+        """, (req.product_id, req.quantity, date_str, prod_id))
+        
+        # Apply new stock
+        cursor.execute("""
+            INSERT INTO stock (product_id, quantity_remaining)
+            VALUES (%s, %s)
+            ON CONFLICT (product_id) DO UPDATE 
+            SET quantity_remaining = stock.quantity_remaining + EXCLUDED.quantity_remaining
+        """, (req.product_id, req.quantity))
+        
+        conn.commit()
+        return {"success": True}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
 
 @app.get("/stock")
 def get_stock():
