@@ -10,11 +10,11 @@ function switchSection(secId,title){
     document.getElementById('view-title').textContent=title.toUpperCase();
     if(secId==='sec-performance')loadMetrics();
     if(secId==='sec-ventas'){loadClientsDropdown();loadStockDropdown();loadSalesHistory();setNow('sale-date');}
-    if(secId==='sec-gastos'){loadCategories();loadProvidersDropdown();loadExpensesHistory();setNow('exp-date');}
+    if(secId==='sec-gastos'){loadCategories();loadProvidersDropdown();loadExpensesHistory();setNow('exp-date'); if(expCont.children.length===0) addExpRow();}
     if(secId==='sec-ingresos'){loadProductsDropdown('prodrun-product');loadProductionHistory();setNow('prodrun-date');}
     if(secId==='sec-clientes')loadClients();
     if(secId==='sec-proveedores')loadProviders();
-    if(secId==='sec-escandallos')loadIngredientsCache().then(loadEscandalloTable);
+    if(secId==='sec-escandallos'){loadIngredientsCache().then(()=>{loadEscandalloTable(); if(escCont.children.length===0) addEscRow();});}
 }
 
 document.getElementById('login-form').addEventListener('submit',async(e)=>{
@@ -142,35 +142,31 @@ async function loadClientsDropdown(){
 async function loadStockDropdown(){
     const res=await fetch(`${API_URL}/stock`);
     allStockProducts=await res.json();
+    if(document.querySelectorAll('.sale-row').length===0) addSaleRow();
 }
 const saleCont=document.getElementById('sale-items-container');
 function addSaleRow(prodId='',qty=''){
     const row=document.createElement('div');row.className='sale-row';
-    row.style.cssText='display:grid;grid-template-columns:2fr 1fr 1fr 1fr 40px;gap:10px;margin-bottom:10px;';
-    row.innerHTML=`<select class="sale-item-prod" required><option value="">PRODUCTO...</option>${allStockProducts.map(p=>`<option value="${p.id}" ${p.id==prodId?'selected':''}>${p.name} (Stock: ${p.stock})</option>`).join('')}</select><input type="number" class="sale-item-qty" placeholder="Cant." required value="${qty}"><input type="number" class="sale-item-price" placeholder="Precio" readonly disabled value="0"><input type="number" class="sale-item-subtotal" placeholder="Subtotal" readonly disabled value="0"><button type="button" class="btn secondary outline remove-sale-item btn-icon"><span class="material-symbols-outlined">close</span></button>`;
+    row.style.cssText='display:grid;grid-template-columns:3fr 1fr 40px;gap:10px;margin-bottom:10px;';
+    row.innerHTML=`<select class="sale-item-prod" required><option value="">SABOR...</option>${allStockProducts.map(p=>`<option value="${p.id}" ${p.id==prodId?'selected':''}>${p.name}</option>`).join('')}</select><input type="number" class="sale-item-qty" placeholder="CANT." required value="${qty}"><button type="button" class="btn secondary outline remove-sale-item btn-icon"><span class="material-symbols-outlined">close</span></button>`;
     saleCont.appendChild(row);
-    if(prodId) updateSaleRowTotals(row);
+    updateSaleTotals();
 }
 document.getElementById('add-sale-item-btn').addEventListener('click',()=>addSaleRow());
 saleCont.addEventListener('click',e=>{const b=e.target.closest('.remove-sale-item');if(b){b.closest('.sale-row').remove();updateSaleTotals();}});
-saleCont.addEventListener('input',e=>{const row=e.target.closest('.sale-row');if(row)updateSaleRowTotals(row);});
-function updateSaleRowTotals(row){
-    const pId=row.querySelector('.sale-item-prod').value;
-    const qty=parseFloat(row.querySelector('.sale-item-qty').value)||0;
-    const prod=allStockProducts.find(p=>p.id==pId);
-    if(prod){
-        row.querySelector('.sale-item-price').value=prod.price.toFixed(2);
-        row.querySelector('.sale-item-subtotal').value=(prod.price*qty).toFixed(2);
-    }
-    updateSaleTotals();
-}
+saleCont.addEventListener('input',updateSaleTotals);
+
 function updateSaleTotals(){
-    let sub=0;document.querySelectorAll('.sale-item-subtotal').forEach(el=>sub+=parseFloat(el.value)||0);
+    let total=0;
+    document.querySelectorAll('.sale-row').forEach(row=>{
+        const pId=row.querySelector('.sale-item-prod').value;
+        const qty=parseFloat(row.querySelector('.sale-item-qty').value)||0;
+        const prod=allStockProducts.find(p=>p.id==pId);
+        if(prod) total+=(prod.price*qty);
+    });
     const discPerc=parseFloat(document.getElementById('sale-discount').value)||0;
-    const discAmt=sub*(discPerc/100);
-    document.getElementById('sale-subtotal-display').textContent=sub.toFixed(2);
-    document.getElementById('sale-discount-display').textContent=discAmt.toFixed(2);
-    document.getElementById('sale-total-display').textContent=(sub-discAmt).toFixed(2);
+    const finalTotal=total*(1-(discPerc/100));
+    document.getElementById('sale-total-display').textContent=finalTotal.toFixed(2);
 }
 document.getElementById('sale-discount').addEventListener('input',updateSaleTotals);
 
@@ -198,13 +194,13 @@ document.getElementById('sale-form').addEventListener('submit',async(e)=>{
 async function loadSalesHistory(){
     const res=await fetch(`${API_URL}/sales`);
     const data=await res.json();
-    document.getElementById('sales-history-tbody').innerHTML=data.map(s=>`<tr><td>${s.date.replace('T',' ')}</td><td><strong>${s.client}</strong></td><td>${s.discount}%</td><td><strong>$${s.total.toFixed(2)}</strong></td><td><span class="tag tag-green">$${s.gpu.toFixed(2)}</span></td><td><button class="btn secondary outline btn-icon" onclick="viewSaleDetails(${s.id})" title="Ver"><span class="material-symbols-outlined">visibility</span></button> <button class="btn secondary outline btn-icon" onclick="deleteSale(${s.id})" title="Eliminar"><span class="material-symbols-outlined">delete</span></button></td></tr>`).join('');
+    document.getElementById('sales-history-tbody').innerHTML=data.map(s=>`<tr><td>${s.date.replace('T',' ')}</td><td><strong>${s.client}</strong></td><td>${s.discount}%</td><td><strong>$${s.total.toFixed(2)}</strong></td><td><span class="tag tag-red">$${s.gpu?s.gpu.toFixed(2):'0.00'}</span></td><td><button class="btn secondary outline btn-icon" onclick="viewSaleDetails(${s.id})" title="Ver"><span class="material-symbols-outlined">visibility</span></button> <button class="btn secondary outline btn-icon" onclick="deleteSale(${s.id})" title="Eliminar"><span class="material-symbols-outlined">delete</span></button></td></tr>`).join('');
 }
 async function viewSaleDetails(id){
     const res=await fetch(`${API_URL}/sales/${id}/items`);
     const items=await res.json();
     document.getElementById('modal-title').textContent=`DETALLE DE VENTA #${id}`;
-    document.getElementById('modal-body').innerHTML=`<table class="data-table"><thead><tr><th>Producto</th><th>Cant.</th><th>Precio</th><th>GPU</th><th>Subtotal</th></tr></thead><tbody>${items.map(i=>`<tr><td>${i.product}</td><td>${i.quantity}</td><td>$${i.unit_price.toFixed(2)}</td><td>$${i.gpu.toFixed(2)}</td><td>$${i.subtotal.toFixed(2)}</td></tr>`).join('')}</tbody></table>`;
+    document.getElementById('modal-body').innerHTML=`<table class="data-table"><thead><tr><th>Producto</th><th>Cant.</th><th>Precio</th><th>GPU (Unit)</th><th>GPV (Total)</th></tr></thead><tbody>${items.map(i=>`<tr><td>${i.product}</td><td>${i.quantity}</td><td>$${i.unit_price.toFixed(2)}</td><td>$${i.gpu.toFixed(2)}</td><td>$${(i.gpu*i.quantity).toFixed(2)}</td></tr>`).join('')}</tbody></table>`;
     document.getElementById('detail-modal').style.display='block';
 }
 async function deleteSale(id){
@@ -293,6 +289,13 @@ async function editExpense(id){
 }
 document.getElementById('cancel-edit-expense-btn').addEventListener('click',()=>{editingExpenseId=null;document.getElementById('expense-form').reset();expCont.innerHTML='';addExpRow();updateExpTotal();document.getElementById('cancel-edit-expense-btn').style.display='none';});
 async function deleteExpense(id){if(confirm('¿ELIMINAR ESTE GASTO?')){await fetch(`${API_URL}/expenses/${id}`,{method:'DELETE'});loadExpensesHistory();}}
+async function viewExpenseDetails(id){
+    const res=await fetch(`${API_URL}/expenses/${id}/items`);
+    const items=await res.json();
+    document.getElementById('modal-title').textContent=`DETALLE DE GASTO #${id}`;
+    document.getElementById('modal-body').innerHTML=`<table class="data-table"><thead><tr><th>Descripción</th><th>Precio</th></tr></thead><tbody>${items.map(i=>`<tr><td>${i.description}</td><td>$${i.unit_price.toFixed(2)}</td></tr>`).join('')}</tbody></table>`;
+    document.getElementById('detail-modal').style.display='block';
+}
 
 // INGRESOS (PRODUCCIÓN)
 let editingProdRunId=null;
@@ -375,5 +378,5 @@ async function loadMetrics(){
     rentEl.className=rent>=0?'value positive':'value negative';
 }
 
-// Global init
-addEscRow();addExpRow();addSaleRow();
+// Global init - Removed automatic row calls to prevent errors on empty data
+// addEscRow();addExpRow();addSaleRow();

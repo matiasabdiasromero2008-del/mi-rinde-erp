@@ -449,12 +449,128 @@ def save_recipe(req: RecipeRequest):
 
 @app.post("/sales")
 def create_sale(req: SaleRequest):
-    date_str = req.date if req.date else datetime.now().strftime("%Y-%m-%d")
-    items_dict = [{"product_id": i.product_id, "quantity": i.quantity} for i in req.items]
+    date_str = req.date if req.date else datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    conn = get_connection()
+    cursor = conn.cursor()
     try:
-        logic.record_sale(req.client_name, items_dict, req.discount, date_str)
-        return {"success": True, "message": "Sale registered"}
-    except Exception as e: raise HTTPException(status_code=400, detail=str(e))
+        # --- Calculate GPV (Gasto Por Venta) ---
+        total_income = 0
+        total_gpv = 0
+        for item in req.items:
+            # Fetch price and current unit GPU for the specific product
+            cursor.execute("SELECT sale_price, current_gpu FROM products WHERE id = %s", (item.product_id,))
+            prod_row = cursor.fetchone()
+            if prod_row:
+                price, unit_gpu = prod_row
+                total_income += price * item.quantity
+                total_gpv += (unit_gpu or 0) * item.quantity
+
+        discount_amount = total_income * (req.discount / 100) if req.discount else 0
+        total_income -= discount_amount
+
+        # --- Insert sale ---
+        cursor.execute("""
+            INSERT INTO sales (client_name, date, discount, total_income, total_gpu_snapshot)
+            VALUES (%s, %s, %s, %s, %s) RETURNING id
+        """, (req.client_name, date_str, req.discount or 0, total_income, total_gpv))
+        sale_id = cursor.fetchone()[0]
+
+        # --- Insert sale items + deduct stock ---
+        for item in req.items:
+            cursor.execute("SELECT current_gpu FROM products WHERE id = %s", (item.product_id,))
+            gpu_row = cursor.fetchone()
+            unit_gpu = gpu_row[0] if gpu_row else 0
+
+            cursor.execute("""
+                INSERT INTO sale_items (sale_id, product_id, quantity, gpu_snapshot)
+                VALUES (%s, %s, %s, %s)
+            """, (sale_id, item.product_id, item.quantity, unit_gpu))
+
+            # Deduct from stock
+            cursor.execute("""
+                UPDATE stock SET quantity_remaining = quantity_remaining - %s
+                WHERE product_id = %s
+            """, (item.quantity, item.product_id))
+
+        conn.commit()
+        return {"success": True, "sale_id": sale_id}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+
+@app.get("/sales")
+def get_sales():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT s.id, s.client_name, s.date, s.discount, s.total_income, 
+               (SELECT AVG(gpu_snapshot) FROM sale_items WHERE sale_id = s.id) as unit_gpu
+        FROM sales s ORDER BY s.date DESC
+    """)
+    results = cursor.fetchall()
+    conn.close()
+    return [{
+        "id": r[0], "client": r[1],
+        "date": r[2].strftime("%Y-%m-%dT%H:%M"),
+        "discount": r[3], "total": r[4], "gpu": r[5] or 0
+    } for r in results]
+
+@app.get("/sales/{sale_id}/items")
+def get_sale_items(sale_id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT p.flavor_name, si.quantity, p.sale_price, si.gpu_snapshot,
+               si.quantity * p.sale_price AS subtotal,
+               si.quantity * si.gpu_snapshot AS costo_total
+        FROM sale_items si
+        JOIN products p ON si.product_id = p.id
+        WHERE si.sale_id = %s
+    """, (sale_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [{"product": r[0], "quantity": r[1], "unit_price": r[2], "gpu": r[3],
+             "subtotal": r[4], "costo_total": r[5]} for r in rows]
+
+@app.delete("/sales/{sale_id}")
+def delete_sale(sale_id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        # Restore stock before deleting
+        cursor.execute("SELECT product_id, quantity FROM sale_items WHERE sale_id = %s", (sale_id,))
+        items = cursor.fetchall()
+        for p_id, qty in items:
+            cursor.execute("""
+                UPDATE stock SET quantity_remaining = quantity_remaining + %s
+                WHERE product_id = %s
+            """, (qty, p_id))
+        cursor.execute("DELETE FROM sale_items WHERE sale_id = %s", (sale_id,))
+        cursor.execute("DELETE FROM sales WHERE id = %s", (sale_id,))
+        conn.commit()
+        return {"success": True}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+
+@app.get("/stock")
+def get_stock_all():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT p.id, p.flavor_name, p.sale_price, COALESCE(s.quantity_remaining, 0)
+        FROM products p
+        LEFT JOIN stock s ON p.id = s.product_id
+    """)
+    results = cursor.fetchall()
+    conn.close()
+    return [{"id": r[0], "name": r[1], "price": r[2], "stock": r[3]} for r in results]
+
+
 
 @app.get("/metrics")
 def get_metrics():
