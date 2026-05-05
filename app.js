@@ -25,6 +25,7 @@ function switchSection(secId, title) {
     
     if (secId === 'sec-performance') loadMetrics();
     if (secId === 'sec-proveedores') loadProviders();
+    if (secId === 'sec-clientes') loadClients();
     if (secId === 'sec-escandallos') {
         loadIngredientsCache().then(loadEscandalloTable);
     }
@@ -41,6 +42,7 @@ function switchSection(secId, title) {
     }
     if (secId === 'sec-ventas') {
         loadProducts();
+        loadClientsDropdown();
         loadStock();
         setDefaultDateTime('sale-date');
     }
@@ -78,6 +80,7 @@ function setupDashboard() {
     if (currentUser.role === 'Admin') {
         addNavLink('donut_small', 'PERFORMANCE', 'sec-performance', true);
         addNavLink('local_shipping', 'PROVEEDORES', 'sec-proveedores');
+        addNavLink('person', 'CLIENTES', 'sec-clientes');
         addNavLink('inventory_2', 'PRODUCTOS', 'sec-escandallos');
         addNavLink('conveyor_belt', 'INGRESOS', 'sec-ingresos');
         addNavLink('receipt_long', 'GASTOS', 'sec-gastos');
@@ -583,6 +586,79 @@ async function deleteProvider(id) {
     }
 }
 
+// --- CLIENTES ---
+let allClients = [];
+let editingClientId = null;
+
+async function loadClients() {
+    const res = await fetch(`${API_URL}/clients`);
+    allClients = await res.json();
+    document.getElementById('clients-tbody').innerHTML = allClients.map(c => `
+        <tr>
+            <td><strong>${c.name}</strong></td>
+            <td>${c.phone || '<span style="color:var(--text-muted)">Sin teléfono</span>'}</td>
+            <td style="white-space: nowrap;">
+                <button class="btn secondary outline btn-icon" onclick="editClient(${c.id}, '${c.name}', '${c.phone}')" title="Editar"><span class="material-symbols-outlined">edit</span></button>
+                <button class="btn secondary outline btn-icon" onclick="deleteClient(${c.id})" title="Eliminar"><span class="material-symbols-outlined">delete</span></button>
+            </td>
+        </tr>`).join('');
+}
+
+document.getElementById('client-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const payload = {
+        name: document.getElementById('client-name').value.trim(),
+        phone: document.getElementById('client-phone').value.trim() || null
+    };
+    let url = `${API_URL}/clients`;
+    let method = 'POST';
+    if (editingClientId) {
+        url = `${API_URL}/clients/${editingClientId}`;
+        method = 'PUT';
+    }
+    try {
+        const res = await fetch(url, {
+            method,
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const msg = document.getElementById('client-msg');
+        if (res.ok) {
+            msg.className = 'success-msg';
+            msg.textContent = 'CLIENTE GUARDADO';
+            e.target.reset();
+            editingClientId = null;
+            document.getElementById('cancel-edit-client-btn').style.display = 'none';
+            loadClients();
+            setTimeout(() => msg.textContent = '', 3000);
+        } else {
+            msg.className = 'error-msg';
+            msg.textContent = 'ERROR AL GUARDAR';
+        }
+    } catch(err) {}
+});
+
+document.getElementById('cancel-edit-client-btn')?.addEventListener('click', () => {
+    editingClientId = null;
+    document.getElementById('client-form').reset();
+    document.getElementById('cancel-edit-client-btn').style.display = 'none';
+});
+
+function editClient(id, name, phone) {
+    editingClientId = id;
+    document.getElementById('client-name').value = name;
+    document.getElementById('client-phone').value = phone || '';
+    document.getElementById('cancel-edit-client-btn').style.display = 'inline-flex';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function deleteClient(id) {
+    if (confirm('¿ELIMINAR ESTE CLIENTE?')) {
+        await fetch(`${API_URL}/clients/${id}`, { method: 'DELETE' });
+        loadClients();
+    }
+}
+
 async function loadProducts() {
     const res = await fetch(`${API_URL}/products`);
     const data = await res.json();
@@ -688,6 +764,13 @@ async function deleteProduction(id) {
 }
 
 async function loadStock() {}
+
+async function loadClientsDropdown() {
+    const res = await fetch(`${API_URL}/clients`);
+    const data = await res.json();
+    const el = document.getElementById('sale-client');
+    if (el) el.innerHTML = '<option value="">SELECIONAR CLIENTE...</option>' + data.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+}
 
 document.getElementById('sale-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();

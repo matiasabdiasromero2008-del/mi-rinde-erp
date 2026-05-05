@@ -114,6 +114,10 @@ class ProductionModel(BaseModel):
     quantity: int
     date: Optional[str] = None
 
+class ClientModel(BaseModel):
+    name: str
+    phone: Optional[str] = None
+
 class SaleItemModel(BaseModel):
     product_id: int
     quantity: int
@@ -278,7 +282,57 @@ def delete_provider(provider_id: int):
     conn.close()
     return {"success": True}
 
-# --- Escandallo Endpoints ---
+# --- Client Endpoints ---
+
+@app.get("/clients")
+def get_clients():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name, phone FROM clients ORDER BY name")
+    results = cursor.fetchall()
+    conn.close()
+    return [{"id": r[0], "name": r[1], "phone": r[2] or ""} for r in results]
+
+@app.post("/clients")
+def add_client(req: ClientModel):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT INTO clients (name, phone) VALUES (%s, %s)", (req.name.upper(), req.phone))
+        conn.commit()
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+
+@app.put("/clients/{client_id}")
+def update_client(client_id: int, req: ClientModel):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE clients SET name = %s, phone = %s WHERE id = %s", (req.name.upper(), req.phone, client_id))
+        conn.commit()
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+
+@app.delete("/clients/{client_id}")
+def delete_client(client_id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM clients WHERE id = %s", (client_id,))
+        conn.commit()
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+
+
 
 @app.get("/ingredients")
 def get_ingredients():

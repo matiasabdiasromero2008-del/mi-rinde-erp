@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rinde ERP</title>
+    <title>ASSET ERP</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
     <link rel="stylesheet" href="/static/style.css">
@@ -26,6 +26,16 @@
             max-width: 600px;
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
         }
+        .asset-logo {
+            font-size: 1.6rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            display: flex;
+            align-items: center;
+            gap: 0;
+        }
+        .asset-logo .white { color: #fff; }
+        .asset-logo .purple { color: var(--primary); }
     </style>
 </head>
 <body>
@@ -33,18 +43,22 @@
         <!-- Login View -->
         <div id="login-view" class="view active">
             <div class="login-card glass">
-                <h1>RINDE</h1>
-                <p>ERP de Rentabilidad Dinámica</p>
+                <div style="display: flex; justify-content: center; margin-bottom: 20px;">
+                    <div class="asset-logo">
+                        <span class="white">A</span><span class="purple">SS</span><span class="white">ET</span>
+                    </div>
+                </div>
+                <p style="color: var(--text-muted); margin-bottom: 30px;">Sistema de Gestión de Rentabilidad</p>
                 <form id="login-form">
-                    <div class="input-group">
+                    <div class="input-group" style="margin-bottom: 15px;">
                         <label for="username">USUARIO</label>
                         <input type="text" id="username" required>
                     </div>
-                    <div class="input-group">
+                    <div class="input-group" style="margin-bottom: 20px;">
                         <label for="password">CONTRASEÑA</label>
                         <input type="password" id="password" required>
                     </div>
-                    <button type="submit" class="btn primary" style="width: 100%; margin-top: 10px;">INGRESAR</button>
+                    <button type="submit" class="btn primary" style="width: 100%;">INGRESAR</button>
                     <div id="login-error" class="error-msg"></div>
                 </form>
             </div>
@@ -54,11 +68,13 @@
         <div id="dashboard-view" class="view">
             <nav class="sidebar">
                 <div class="brand">
-                    <span class="material-symbols-outlined">donut_small</span>
-                    RINDE
+                    <div class="asset-logo" style="font-size:1.2rem;">
+                        <span class="white">A</span><span class="purple">SS</span><span class="white">ET</span>
+                    </div>
                 </div>
                 <ul id="nav-links"></ul>
                 <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid var(--surface-border);">
+                    <div id="user-display" style="font-size: 0.8rem; color: var(--text-muted); padding: 0 10px 12px; font-weight: 600;"></div>
                     <button id="logout-btn" class="btn secondary outline" style="width: 100%; justify-content: flex-start;">
                         <span class="material-symbols-outlined">logout</span> CERRAR SESIÓN
                     </button>
@@ -67,18 +83,17 @@
             <main class="content">
                 <header>
                     <h2 id="view-title">DASHBOARD</h2>
-                    <div class="user-info" id="user-display" style="font-weight: 600; color: var(--primary);"></div>
                 </header>
 
-                <!-- Admin: PERFORMANCE -->
+                <!-- PERFORMANCE -->
                 <section id="sec-performance" class="section active">
                     <div class="cards-grid">
                         <div class="card metric-card">
-                            <h3>INGRESOS</h3>
+                            <h3>INGRESOS VENTAS</h3>
                             <div class="value positive" id="metric-ingresos">$0.00</div>
                         </div>
                         <div class="card metric-card">
-                            <h3>GTR (COSTO)</h3>
+                            <h3>GTR (COSTO PROD.)</h3>
                             <div class="value negative" id="metric-gtr">$0.00</div>
                         </div>
                         <div class="card metric-card">
@@ -96,10 +111,12 @@
                     </div>
                 </section>
 
-                <!-- Admin: PROVEEDORES -->
+                <!-- PROVEEDORES -->
                 <section id="sec-proveedores" class="section">
                     <div class="card">
-                        <h3>REGISTRAR NUEVO PROVEEDOR</h3>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h3 style="margin: 0;">REGISTRAR NUEVO PROVEEDOR</h3>
+                        </div>
                         <form id="provider-form">
                             <div class="form-row">
                                 <div class="input-group">
@@ -119,20 +136,49 @@
                         <h3>LISTA DE PROVEEDORES</h3>
                         <div class="table-container">
                             <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>NOMBRE</th>
-                                        <th>CATEGORÍA</th>
-                                        <th style="width: 80px;">ACCIONES</th>
-                                    </tr>
-                                </thead>
+                                <thead><tr><th>NOMBRE</th><th>CATEGORÍA</th><th style="width: 80px;">ACCIONES</th></tr></thead>
                                 <tbody id="providers-tbody"></tbody>
                             </table>
                         </div>
                     </div>
                 </section>
 
-                <!-- Admin: PRODUCTOS -->
+                <!-- CLIENTES -->
+                <section id="sec-clientes" class="section">
+                    <div class="card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h3 style="margin: 0;">REGISTRAR NUEVO CLIENTE</h3>
+                            <button type="button" id="cancel-edit-client-btn" class="btn secondary outline" style="display: none; padding: 6px 12px; font-size: 0.8rem;">
+                                <span class="material-symbols-outlined" style="font-size: 1rem;">close</span> CANCELAR EDICIÓN
+                            </button>
+                        </div>
+                        <form id="client-form">
+                            <div class="form-row">
+                                <div class="input-group" style="flex: 2;">
+                                    <label>NOMBRE DEL CLIENTE</label>
+                                    <input type="text" id="client-name" required>
+                                </div>
+                                <div class="input-group">
+                                    <label>TELÉFONO</label>
+                                    <input type="tel" id="client-phone" placeholder="Ej: +54 11 1234-5678">
+                                </div>
+                            </div>
+                            <button type="submit" class="btn primary"><span class="material-symbols-outlined">save</span> GUARDAR CLIENTE</button>
+                            <div id="client-msg"></div>
+                        </form>
+                    </div>
+                    <div class="card mt-4">
+                        <h3>LISTA DE CLIENTES</h3>
+                        <div class="table-container">
+                            <table class="data-table">
+                                <thead><tr><th>NOMBRE</th><th>TELÉFONO</th><th style="width: 100px;">ACCIONES</th></tr></thead>
+                                <tbody id="clients-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- PRODUCTOS -->
                 <section id="sec-escandallos" class="section">
                     <div class="card">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
@@ -196,7 +242,50 @@
                     </div>
                 </section>
 
-                <!-- Admin: GASTOS -->
+                <!-- INGRESOS -->
+                <section id="sec-ingresos" class="section">
+                    <div class="card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h3 style="margin: 0;">REGISTRAR PRODUCCIÓN (INGRESOS)</h3>
+                            <button type="button" id="cancel-edit-prodrun-btn" class="btn secondary outline" style="display: none; padding: 6px 12px; font-size: 0.8rem;">
+                                <span class="material-symbols-outlined" style="font-size: 1rem;">close</span> CANCELAR EDICIÓN
+                            </button>
+                        </div>
+                        <form id="prodrun-form">
+                            <div class="form-row">
+                                <div class="input-group" style="flex: 2;">
+                                    <label>SABOR (PRODUCTO)</label>
+                                    <select id="prodrun-product" required></select>
+                                </div>
+                                <div class="input-group">
+                                    <label>UNIDADES (FRASCOS)</label>
+                                    <input type="number" id="prodrun-qty" required min="1">
+                                </div>
+                                <div class="input-group">
+                                    <label>FECHA Y HORA</label>
+                                    <input type="datetime-local" id="prodrun-date" required>
+                                </div>
+                            </div>
+                            <div style="display: flex; justify-content: flex-end; margin-top: 20px;">
+                                <button type="submit" class="btn primary" style="padding: 12px 40px;">
+                                    <span class="material-symbols-outlined">save</span> GUARDAR INGRESO
+                                </button>
+                            </div>
+                            <div id="prodrun-msg"></div>
+                        </form>
+                    </div>
+                    <div class="card mt-4">
+                        <h3>HISTORIAL DE INGRESOS (PRODUCCIÓN)</h3>
+                        <div class="table-container">
+                            <table class="data-table">
+                                <thead><tr><th>FECHA</th><th>SABOR</th><th>UNIDADES</th><th style="width: 100px;">ACCIONES</th></tr></thead>
+                                <tbody id="prodrun-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- GASTOS -->
                 <section id="sec-gastos" class="section">
                     <div class="card">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
@@ -237,78 +326,20 @@
                         <h3>HISTORIAL DE GASTOS</h3>
                         <div class="table-container">
                             <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>FECHA</th>
-                                        <th>PROVEEDOR</th>
-                                        <th>CATEGORÍA</th>
-                                        <th>TOTAL</th>
-                                        <th style="width: 140px;">ACCIONES</th>
-                                    </tr>
-                                </thead>
+                                <thead><tr><th>FECHA</th><th>PROVEEDOR</th><th>CATEGORÍA</th><th>TOTAL</th><th style="width: 140px;">ACCIONES</th></tr></thead>
                                 <tbody id="expenses-history-tbody"></tbody>
                             </table>
                         </div>
                     </div>
                 </section>
 
-                <!-- Admin: INGRESOS -->
-                <section id="sec-ingresos" class="section">
-                    <div class="card">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                            <h3 style="margin: 0;">REGISTRAR PRODUCCIÓN (INGRESOS)</h3>
-                            <button type="button" id="cancel-edit-prodrun-btn" class="btn secondary outline" style="display: none; padding: 6px 12px; font-size: 0.8rem;">
-                                <span class="material-symbols-outlined" style="font-size: 1rem;">close</span> CANCELAR EDICIÓN
-                            </button>
-                        </div>
-                        <form id="prodrun-form">
-                            <div class="form-row">
-                                <div class="input-group" style="flex: 2;">
-                                    <label>SABOR (PRODUCTO)</label>
-                                    <select id="prodrun-product" required></select>
-                                </div>
-                                <div class="input-group">
-                                    <label>UNIDADES (FRASCOS)</label>
-                                    <input type="number" id="prodrun-qty" required min="1">
-                                </div>
-                                <div class="input-group">
-                                    <label>FECHA Y HORA</label>
-                                    <input type="datetime-local" id="prodrun-date" required>
-                                </div>
-                            </div>
-                            <div style="display: flex; justify-content: flex-end; align-items: center; margin-top: 20px;">
-                                <button type="submit" class="btn primary" style="padding: 12px 40px;">
-                                    <span class="material-symbols-outlined">save</span> GUARDAR INGRESO
-                                </button>
-                            </div>
-                            <div id="prodrun-msg"></div>
-                        </form>
-                    </div>
-                    <div class="card mt-4">
-                        <h3>HISTORIAL DE INGRESOS (PRODUCCIÓN)</h3>
-                        <div class="table-container">
-                            <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>FECHA</th>
-                                        <th>SABOR</th>
-                                        <th>UNIDADES</th>
-                                        <th style="width: 100px;">ACCIONES</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="prodrun-tbody"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Operator: VENTAS -->
+                <!-- VENTAS (Operador) -->
                 <section id="sec-ventas" class="section">
                     <div class="card">
                         <h3>REGISTRAR VENTA</h3>
                         <form id="sale-form">
                             <div class="form-row">
-                                <div class="input-group"><label>CLIENTE</label><input type="text" id="sale-client" required></div>
+                                <div class="input-group"><label>CLIENTE</label><select id="sale-client" required></select></div>
                                 <div class="input-group"><label>FECHA Y HORA</label><input type="datetime-local" id="sale-date" required></div>
                             </div>
                             <div class="form-row">
@@ -323,12 +354,12 @@
         </div>
     </div>
 
-    <!-- Modal for Detail -->
+    <!-- Modal -->
     <div id="detail-modal" class="modal">
         <div class="modal-content">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3 id="modal-title" style="margin: 0; color: var(--text-main);">DETALLE DEL REGISTRO</h3>
-                <button class="btn-icon" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer;" onclick="closeModal()">
+                <h3 id="modal-title" style="margin: 0;">DETALLE DEL REGISTRO</h3>
+                <button style="background: transparent; border: none; color: var(--text-muted); cursor: pointer;" onclick="closeModal()">
                     <span class="material-symbols-outlined">close</span>
                 </button>
             </div>
