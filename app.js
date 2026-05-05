@@ -154,6 +154,12 @@ function addEscRow(name = '', qty = '') {
 }
 
 document.getElementById('esc-add-item-btn').addEventListener('click', () => addEscRow());
+escItemsContainer.addEventListener('click', (e) => {
+    if (e.target.closest('.remove-esc-item')) {
+        e.target.closest('.esc-row').remove();
+        updateEscTotals();
+    }
+});
 escItemsContainer.addEventListener('input', (e) => {
     if (e.target.classList.contains('esc-item-name') || e.target.classList.contains('esc-item-qty')) {
         const row = e.target.closest('.esc-row');
@@ -200,10 +206,16 @@ document.getElementById('escandallo-form').addEventListener('submit', async (e) 
         await fetch(`${API_URL}/products`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ flavor_name: sabor, sale_price: price, yield_per_batch: yld })
+            body: JSON.stringify({ flavor_name: sabor.toUpperCase(), sale_price: price, yield_per_batch: yld })
         });
         const products = await (await fetch(`${API_URL}/products`)).json();
         productId = products.find(p => p.name.toLowerCase() === sabor.toLowerCase())?.id;
+    } else {
+        await fetch(`${API_URL}/products/${productId}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ flavor_name: sabor.toUpperCase(), sale_price: price, yield_per_batch: yld })
+        });
     }
 
     const items = [];
@@ -216,7 +228,7 @@ document.getElementById('escandallo-form').addEventListener('submit', async (e) 
             await fetch(`${API_URL}/ingredients`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ name: name })
+                body: JSON.stringify({ name: name.toUpperCase() })
             });
             await loadIngredientsCache();
             ing = allIngredients.find(i => i.name.toLowerCase() === name.toLowerCase());
@@ -242,11 +254,16 @@ document.getElementById('escandallo-form').addEventListener('submit', async (e) 
 
 async function deleteProduct(id) {
     if (confirm('¿ELIMINAR ESTE PRODUCTO? ESTO BORRARÁ SU RECETA Y STOCK.')) {
-        await fetch(`${API_URL}/products/${id}`, { method: 'DELETE' });
-        loadEscandalloTable();
-        if (editingProductId === id) {
-            document.getElementById('escandallo-form').reset();
-            editingProductId = null;
+        const res = await fetch(`${API_URL}/products/${id}`, { method: 'DELETE' });
+        if (!res.ok) {
+            const data = await res.json();
+            alert(data.detail || "Error al eliminar el producto.");
+        } else {
+            loadEscandalloTable();
+            if (editingProductId === id) {
+                document.getElementById('escandallo-form').reset();
+                editingProductId = null;
+            }
         }
     }
 }

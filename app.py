@@ -269,16 +269,42 @@ def add_product(req: ProductModel):
 
 @app.delete("/products/{product_id}")
 def delete_product(product_id: int):
+    import psycopg2.errors
     conn = get_connection()
     cursor = conn.cursor()
-    # Delete related product_ingredients first
-    cursor.execute("DELETE FROM product_ingredients WHERE product_id = %s", (product_id,))
-    # Delete related stock
-    cursor.execute("DELETE FROM stock WHERE product_id = %s", (product_id,))
-    cursor.execute("DELETE FROM products WHERE id = %s", (product_id,))
-    conn.commit()
-    conn.close()
-    return {"success": True}
+    try:
+        # Delete related product_ingredients first
+        cursor.execute("DELETE FROM product_ingredients WHERE product_id = %s", (product_id,))
+        # Delete related stock
+        cursor.execute("DELETE FROM stock WHERE product_id = %s", (product_id,))
+        cursor.execute("DELETE FROM products WHERE id = %s", (product_id,))
+        conn.commit()
+        return {"success": True}
+    except psycopg2.errors.ForeignKeyViolation:
+        conn.rollback()
+        raise HTTPException(status_code=400, detail="No se puede eliminar el producto porque ya tiene ventas registradas.")
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+
+@app.put("/products/{product_id}")
+def update_product(product_id: int, req: ProductModel):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            UPDATE products 
+            SET flavor_name = %s, sale_price = %s, yield_per_batch = %s
+            WHERE id = %s
+        """, (req.flavor_name, req.sale_price, req.yield_per_batch, product_id))
+        conn.commit()
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
 
 @app.get("/recipes/{product_id}")
 def get_recipe(product_id: int):
