@@ -229,17 +229,22 @@ async function loadProvidersDropdown(){
     }
 }
 const expCont=document.getElementById('expense-items-container');
-function addExpRow(desc='',price=''){
+function addExpRow(desc='',qty=1,price=''){
     const row=document.createElement('div');row.className='exp-row';
-    row.style.cssText='display:grid;grid-template-columns:3fr 1fr 40px;gap:10px;margin-bottom:10px;';
-    row.innerHTML=`<input type="text" class="exp-item-desc" placeholder="Descripción" value="${desc}" required><input type="number" step="0.01" class="exp-item-price" placeholder="Precio" value="${price}" required><button type="button" class="btn secondary outline remove-exp-item btn-icon"><span class="material-symbols-outlined">close</span></button>`;
+    row.style.cssText='display:grid;grid-template-columns:3fr 1fr 1fr 40px;gap:10px;margin-bottom:10px;';
+    row.innerHTML=`<input type="text" class="exp-item-desc" placeholder="Descripción" value="${desc}" required><input type="number" step="0.01" class="exp-item-qty" placeholder="Cant." value="${qty}" required><input type="number" step="0.01" class="exp-item-price" placeholder="Precio Unit." value="${price}" required><button type="button" class="btn secondary outline remove-exp-item btn-icon"><span class="material-symbols-outlined">close</span></button>`;
     expCont.appendChild(row);
 }
 document.getElementById('add-item-btn').addEventListener('click',()=>addExpRow());
 expCont.addEventListener('click',e=>{const b=e.target.closest('.remove-exp-item');if(b){b.closest('.exp-row').remove();updateExpTotal();}});
 expCont.addEventListener('input',updateExpTotal);
 function updateExpTotal(){
-    let t=0;document.querySelectorAll('.exp-item-price').forEach(el=>t+=parseFloat(el.value)||0);
+    let t=0;
+    document.querySelectorAll('.exp-row').forEach(row=>{
+        const q=parseFloat(row.querySelector('.exp-item-qty').value)||0;
+        const p=parseFloat(row.querySelector('.exp-item-price').value)||0;
+        t+=(q*p);
+    });
     document.getElementById('exp-total-display').textContent=t.toFixed(2);
 }
 let editingExpenseId=null;
@@ -248,8 +253,9 @@ document.getElementById('expense-form').addEventListener('submit',async(e)=>{
     const items=[];
     document.querySelectorAll('.exp-row').forEach(row=>{
         const desc=row.querySelector('.exp-item-desc').value.trim();
-        const price=parseFloat(row.querySelector('.exp-item-price').value);
-        if(desc&&!isNaN(price))items.push({description:desc,unit_price:price});
+        const qty=parseFloat(row.querySelector('.exp-item-qty').value)||0;
+        const price=parseFloat(row.querySelector('.exp-item-price').value)||0;
+        if(desc&&qty&&price)items.push({description:desc,quantity:qty,unit_price:price});
     });
     const payload={
         provider_id:parseInt(document.getElementById('exp-prov').value),
@@ -282,7 +288,7 @@ async function editExpense(id){
     expCont.innerHTML='';
     const itemsRes=await fetch(`${API_URL}/expenses/${id}/items`);
     const items=await itemsRes.json();
-    items.forEach(i=>addExpRow(i.description,i.unit_price));
+    items.forEach(i=>addExpRow(i.description,i.quantity,i.unit_price));
     updateExpTotal();
     document.getElementById('cancel-edit-expense-btn').style.display='inline-flex';
     window.scrollTo({top:0,behavior:'smooth'});
@@ -293,7 +299,7 @@ async function viewExpenseDetails(id){
     const res=await fetch(`${API_URL}/expenses/${id}/items`);
     const items=await res.json();
     document.getElementById('modal-title').textContent=`DETALLE DE GASTO #${id}`;
-    document.getElementById('modal-body').innerHTML=`<table class="data-table"><thead><tr><th>Descripción</th><th>Precio</th></tr></thead><tbody>${items.map(i=>`<tr><td>${i.description}</td><td>$${i.unit_price.toFixed(2)}</td></tr>`).join('')}</tbody></table>`;
+    document.getElementById('modal-body').innerHTML=`<table class="data-table"><thead><tr><th>Descripción</th><th>Cant.</th><th>Precio Unit.</th><th>Subtotal</th></tr></thead><tbody>${items.map(i=>`<tr><td>${i.description}</td><td>${i.quantity}</td><td>$${i.unit_price.toFixed(2)}</td><td>$${(i.quantity*i.unit_price).toFixed(2)}</td></tr>`).join('')}</tbody></table>`;
     document.getElementById('detail-modal').style.display='block';
 }
 
