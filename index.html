@@ -89,8 +89,14 @@
                                 <select id="sale-client" required></select>
                             </div>
                             <div class="input-group">
-                                <label>DESCUENTO (Ej: 5% o $1000)</label>
-                                <input type="text" id="sale-discount" value="0">
+                                <label>DESCUENTO</label>
+                                <div style="display: flex; gap: 8px;">
+                                    <input type="number" id="sale-discount" value="0" min="0" step="any" style="flex: 1; min-width: 0;">
+                                    <select id="sale-discount-type" style="width: 75px; min-width: 75px; padding: 10px 8px;">
+                                        <option value="percent">%</option>
+                                        <option value="fixed">$</option>
+                                    </select>
+                                </div>
                             </div>
                             <div class="input-group">
                                 <label>FECHA Y HORA</label>

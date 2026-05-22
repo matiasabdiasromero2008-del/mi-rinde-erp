@@ -156,17 +156,12 @@ document.getElementById('add-sale-item-btn').addEventListener('click',()=>addSal
 saleCont.addEventListener('click',e=>{const b=e.target.closest('.remove-sale-item');if(b){b.closest('.sale-row').remove();updateSaleTotals();}});
 saleCont.addEventListener('input',updateSaleTotals);
 
-function getDiscountValueToSend(discountStr) {
-    discountStr = (discountStr || '').toString().trim();
-    if (!discountStr) return 0;
-    if (discountStr.endsWith('%')) {
-        return parseFloat(discountStr.slice(0, -1)) || 0;
-    }
-    if (discountStr.startsWith('$')) {
-        return -(parseFloat(discountStr.slice(1)) || 0);
-    }
-    const val = parseFloat(discountStr) || 0;
-    return -val;
+function getDiscountValueToSend() {
+    const val = parseFloat(document.getElementById('sale-discount').value) || 0;
+    const type = document.getElementById('sale-discount-type').value;
+    if (val === 0) return 0;
+    // Positive = percentage, negative = fixed amount (matches backend convention)
+    return type === 'percent' ? val : -val;
 }
 
 function updateSaleTotals(){
@@ -177,8 +172,7 @@ function updateSaleTotals(){
         const prod=allStockProducts.find(p=>p.id==pId);
         if(prod) total+=(prod.price*qty);
     });
-    const discountStr = document.getElementById('sale-discount').value;
-    const discVal = getDiscountValueToSend(discountStr);
+    const discVal = getDiscountValueToSend();
     let finalTotal = total;
     if (discVal > 0) {
         finalTotal = total * (1 - (discVal / 100));
@@ -189,6 +183,7 @@ function updateSaleTotals(){
     document.getElementById('sale-total-display').textContent=finalTotal.toFixed(2);
 }
 document.getElementById('sale-discount').addEventListener('input',updateSaleTotals);
+document.getElementById('sale-discount-type').addEventListener('change',updateSaleTotals);
 
 document.getElementById('sale-form').addEventListener('submit',async(e)=>{
     e.preventDefault();
@@ -198,11 +193,10 @@ document.getElementById('sale-form').addEventListener('submit',async(e)=>{
         const qty=parseInt(row.querySelector('.sale-item-qty').value);
         if(pId&&qty)items.push({product_id:parseInt(pId),quantity:qty});
     });
-    const discountStr = document.getElementById('sale-discount').value;
     const payload={
         client_name:document.getElementById('sale-client').value,
         items:items,
-        discount:getDiscountValueToSend(discountStr),
+        discount:getDiscountValueToSend(),
         date:document.getElementById('sale-date').value
     };
     const res=await fetch(`${API_URL}/sales`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
