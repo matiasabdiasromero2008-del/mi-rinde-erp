@@ -79,7 +79,8 @@ class ExpenseItemModel(BaseModel):
     unit_price: float
 
 class ExpenseRequest(BaseModel):
-    provider: str
+    provider_id: Optional[int] = None
+    provider: Optional[str] = None
     category_name: str
     items: List[ExpenseItemModel]
     date: Optional[str] = None
@@ -156,16 +157,26 @@ def get_expenses():
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT e.id, e.provider, c.name, e.date, e.total_amount
+        SELECT e.id, e.provider, c.name, e.date, e.total_amount, p.id
         FROM expenses e
         JOIN categories c ON e.category_id = c.id
+        LEFT JOIN providers p ON e.provider = p.name
         ORDER BY e.date DESC, e.id DESC
         LIMIT 50
     """)
     results = cursor.fetchall()
     conn.close()
-    # Format date to string with time
-    return [{"id": r[0], "provider": r[1], "category": r[2], "date": r[3].strftime("%Y-%m-%d %H:%M"), "amount": r[4]} for r in results]
+    return [{
+        "id": r[0],
+        "provider": r[1],
+        "provider_name": r[1],
+        "provider_id": r[5] or 0,
+        "category": r[2],
+        "category_name": r[2],
+        "date": r[3].strftime("%Y-%m-%d %H:%M") if r[3] else "",
+        "amount": r[4],
+        "total": r[4]
+    } for r in results]
 
 @app.get("/expenses/{expense_id}/items")
 def get_expense_items(expense_id: int):
@@ -180,8 +191,17 @@ def get_expense_items(expense_id: int):
 def create_expense(req: ExpenseRequest):
     date_str = req.date if req.date else datetime.now().strftime("%Y-%m-%d")
     items_dict = [{"description": i.description, "quantity": i.quantity, "unit_price": i.unit_price} for i in req.items]
+    provider_name = req.provider or "Desconocido"
+    if req.provider_id:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM providers WHERE id = %s", (req.provider_id,))
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            provider_name = row[0]
     try:
-        logic.add_expense(req.provider, req.category_name, items_dict, date_str)
+        logic.add_expense(provider_name, req.category_name, items_dict, date_str)
         return {"success": True, "message": "Expense registered"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -201,6 +221,15 @@ def delete_expense(expense_id: int):
 def update_expense(expense_id: int, req: ExpenseRequest):
     date_str = req.date if req.date else datetime.now().strftime("%Y-%m-%d")
     items_dict = [{"description": i.description, "quantity": i.quantity, "unit_price": i.unit_price} for i in req.items]
+    provider_name = req.provider or "Desconocido"
+    if req.provider_id:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM providers WHERE id = %s", (req.provider_id,))
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            provider_name = row[0]
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -215,7 +244,7 @@ def update_expense(expense_id: int, req: ExpenseRequest):
             UPDATE expenses 
             SET provider = %s, category_id = %s, date = %s, total_amount = %s
             WHERE id = %s
-        """, (req.provider, cat_id, date_str, total_amount, expense_id))
+        """, (provider_name, cat_id, date_str, total_amount, expense_id))
         
         # 2. Delete old items and insert new ones
         cursor.execute("DELETE FROM expense_items WHERE expense_id = %s", (expense_id,))
@@ -465,7 +494,12 @@ def create_sale(req: SaleRequest):
                 total_income += price * item.quantity
                 total_gpv += (unit_gpu or 0) * item.quantity
 
-        discount_amount = total_income * (req.discount / 100) if req.discount else 0
+        if req.discount < 0:
+            # Absolute discount
+            discount_amount = abs(req.discount)
+        else:
+            # Percentage discount
+            discount_amount = total_income * (req.discount / 100) if req.discount else 0
         total_income -= discount_amount
 
         # --- Insert sale ---
@@ -513,8 +547,9 @@ def get_sales():
     conn.close()
     return [{
         "id": r[0], "client": r[1],
-        "date": r[2].strftime("%Y-%m-%dT%H:%M"),
-        "discount": r[3], "total": r[4], "gpu": r[5] or 0
+        "date": r[2].strftime("%Y-%m-%dT%H:%M") if r[2] else "",
+        "discount": f"${abs(r[3]):.2f}" if r[3] < 0 else (f"{r[3]:g}%" if r[3] > 0 else "0%"),
+        "total": r[4], "gpu": r[5] or 0
     } for r in results]
 
 @app.get("/sales/{sale_id}/items")

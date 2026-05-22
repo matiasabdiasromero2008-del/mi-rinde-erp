@@ -25,13 +25,7 @@
     <div id="login-view" class="view active">
         <div class="login-card glass">
             <div style="display:flex;justify-content:center;margin-bottom:24px;">
-                <!-- ASSET logo SVG Stylized Refined -->
-                <svg class="asset-svg-logo" viewBox="0 0 300 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <text x="5" y="75" font-family="Outfit, sans-serif" font-weight="700" font-size="80" fill="white">A</text>
-                    <path d="M70 70C70 40 100 30 120 30C140 30 160 40 160 70C160 100 140 110 120 110C100 110 70 100 70 70Z" stroke="#7c3aed" stroke-width="12" fill="none" />
-                    <path d="M115 70C115 40 145 30 165 30C185 30 205 40 205 70C205 100 185 110 165 110C145 110 115 100 115 70Z" stroke="#7c3aed" stroke-width="12" fill="none" />
-                    <text x="210" y="75" font-family="Outfit, sans-serif" font-weight="700" font-size="80" fill="white">ET</text>
-                </svg>
+                <img src="/static/logo.jpg" alt="ASSET Logo" style="max-width: 280px; height: auto; border-radius: 4px;">
             </div>
             <p style="color:var(--text-muted);margin-bottom:28px;text-align:center;">Sistema de Gestión de Rentabilidad</p>
             <form id="login-form">
@@ -52,14 +46,8 @@
     <!-- DASHBOARD -->
     <div id="dashboard-view" class="view">
         <nav class="sidebar">
-            <div class="brand">
-                <svg class="asset-svg-logo-sm" viewBox="0 0 300 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <text x="5" y="75" font-family="Outfit, sans-serif" font-weight="700" font-size="80" fill="white">A</text>
-                    <!-- Stylized Intertwined SS (Infinity style) -->
-                    <path d="M70 70C70 40 100 30 120 30C140 30 160 40 160 70C160 100 140 110 120 110C100 110 70 100 70 70Z" stroke="#7c3aed" stroke-width="12" fill="none" />
-                    <path d="M115 70C115 40 145 30 165 30C185 30 205 40 205 70C205 100 185 110 165 110C145 110 115 100 115 70Z" stroke="#7c3aed" stroke-width="12" fill="none" />
-                    <text x="210" y="75" font-family="Outfit, sans-serif" font-weight="700" font-size="80" fill="white">ET</text>
-                </svg>
+            <div class="brand" style="padding: 10px 0; text-align: center;">
+                <img src="/static/logo.jpg" alt="ASSET Logo" style="max-width: 140px; height: auto; border-radius: 4px;">
             </div>
             <ul id="nav-links"></ul>
             <div style="margin-top:auto;padding-top:20px;border-top:1px solid var(--surface-border);">
@@ -101,8 +89,8 @@
                                 <select id="sale-client" required></select>
                             </div>
                             <div class="input-group">
-                                <label>DESCUENTO (%)</label>
-                                <input type="number" id="sale-discount" value="0" min="0" max="100" step="0.01">
+                                <label>DESCUENTO (Ej: 5% o $1000)</label>
+                                <input type="text" id="sale-discount" value="0">
                             </div>
                             <div class="input-group">
                                 <label>FECHA Y HORA</label>

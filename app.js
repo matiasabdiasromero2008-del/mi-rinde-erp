@@ -156,6 +156,19 @@ document.getElementById('add-sale-item-btn').addEventListener('click',()=>addSal
 saleCont.addEventListener('click',e=>{const b=e.target.closest('.remove-sale-item');if(b){b.closest('.sale-row').remove();updateSaleTotals();}});
 saleCont.addEventListener('input',updateSaleTotals);
 
+function getDiscountValueToSend(discountStr) {
+    discountStr = (discountStr || '').toString().trim();
+    if (!discountStr) return 0;
+    if (discountStr.endsWith('%')) {
+        return parseFloat(discountStr.slice(0, -1)) || 0;
+    }
+    if (discountStr.startsWith('$')) {
+        return -(parseFloat(discountStr.slice(1)) || 0);
+    }
+    const val = parseFloat(discountStr) || 0;
+    return -val;
+}
+
 function updateSaleTotals(){
     let total=0;
     document.querySelectorAll('.sale-row').forEach(row=>{
@@ -164,8 +177,15 @@ function updateSaleTotals(){
         const prod=allStockProducts.find(p=>p.id==pId);
         if(prod) total+=(prod.price*qty);
     });
-    const discPerc=parseFloat(document.getElementById('sale-discount').value)||0;
-    const finalTotal=total*(1-(discPerc/100));
+    const discountStr = document.getElementById('sale-discount').value;
+    const discVal = getDiscountValueToSend(discountStr);
+    let finalTotal = total;
+    if (discVal > 0) {
+        finalTotal = total * (1 - (discVal / 100));
+    } else if (discVal < 0) {
+        finalTotal = total - Math.abs(discVal);
+    }
+    if (finalTotal < 0) finalTotal = 0;
     document.getElementById('sale-total-display').textContent=finalTotal.toFixed(2);
 }
 document.getElementById('sale-discount').addEventListener('input',updateSaleTotals);
@@ -178,10 +198,11 @@ document.getElementById('sale-form').addEventListener('submit',async(e)=>{
         const qty=parseInt(row.querySelector('.sale-item-qty').value);
         if(pId&&qty)items.push({product_id:parseInt(pId),quantity:qty});
     });
+    const discountStr = document.getElementById('sale-discount').value;
     const payload={
         client_name:document.getElementById('sale-client').value,
         items:items,
-        discount:parseFloat(document.getElementById('sale-discount').value)||0,
+        discount:getDiscountValueToSend(discountStr),
         date:document.getElementById('sale-date').value
     };
     const res=await fetch(`${API_URL}/sales`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
@@ -194,7 +215,7 @@ document.getElementById('sale-form').addEventListener('submit',async(e)=>{
 async function loadSalesHistory(){
     const res=await fetch(`${API_URL}/sales`);
     const data=await res.json();
-    document.getElementById('sales-history-tbody').innerHTML=data.map(s=>`<tr><td>${s.date.replace('T',' ')}</td><td><strong>${s.client}</strong></td><td>${s.discount}%</td><td><strong>$${s.total.toFixed(2)}</strong></td><td><span class="tag tag-red">$${s.gpu?s.gpu.toFixed(2):'0.00'}</span></td><td><button class="btn secondary outline btn-icon" onclick="viewSaleDetails(${s.id})" title="Ver"><span class="material-symbols-outlined">visibility</span></button> <button class="btn secondary outline btn-icon" onclick="deleteSale(${s.id})" title="Eliminar"><span class="material-symbols-outlined">delete</span></button></td></tr>`).join('');
+    document.getElementById('sales-history-tbody').innerHTML=data.map(s=>`<tr><td>${s.date.replace('T',' ')}</td><td><strong>${s.client}</strong></td><td>${s.discount}</td><td><strong>$${s.total.toFixed(2)}</strong></td><td><span class="tag tag-red">$${s.gpu?s.gpu.toFixed(2):'0.00'}</span></td><td><button class="btn secondary outline btn-icon" onclick="viewSaleDetails(${s.id})" title="Ver"><span class="material-symbols-outlined">visibility</span></button> <button class="btn secondary outline btn-icon" onclick="deleteSale(${s.id})" title="Eliminar"><span class="material-symbols-outlined">delete</span></button></td></tr>`).join('');
 }
 async function viewSaleDetails(id){
     const res=await fetch(`${API_URL}/sales/${id}/items`);
