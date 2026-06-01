@@ -386,17 +386,201 @@ document.getElementById('provider-form').addEventListener('submit',async(e)=>{
 });
 async function deleteProvider(id){if(confirm('¿ELIMINAR ESTE PROVEEDOR?')){await fetch(`${API_URL}/providers/${id}`,{method:'DELETE'});loadProviders();}}
 
-// PERFORMANCE
-async function loadMetrics(){
-    const res=await fetch(`${API_URL}/metrics`);
-    const d=await res.json();
-    document.getElementById('metric-ingresos').textContent=`$${d.total_income.toFixed(2)}`;
-    document.getElementById('metric-gtr').textContent=`$${d.total_gtr.toFixed(2)}`;
-    document.getElementById('metric-egresos').textContent=`$${d.total_operational.toFixed(2)}`;
-    const rent=(d.total_income>0)?((d.total_income-d.total_gtr-d.total_operational)/d.total_income*100):0;
-    const rentEl=document.getElementById('metric-rentabilidad');
-    rentEl.textContent=`${rent.toFixed(2)}%`;
-    rentEl.className=rent>=0?'value positive':'value negative';
+// PERFORMANCE (Rendimiento Inteligente)
+let metricsSelectorInitialized = false;
+
+async function loadMetrics() {
+    try {
+        // 1. Obtener ventas, gastos y productos actuales para calcular GTR y desgloses
+        const [salesRes, expensesRes, productsRes] = await Promise.all([
+            fetch(`${API_URL}/sales`),
+            fetch(`${API_URL}/expenses`),
+            fetch(`${API_URL}/products`)
+        ]);
+        
+        const allSales = await salesRes.json();
+        const allExpenses = await expensesRes.json();
+        const allProducts = await productsRes.json(); // Para buscar el GPU actual o info extra si es necesario
+
+        // 2. Extraer todos los meses disponibles del historial de Ventas y Gastos
+        const monthsSet = new Set();
+        const todayStr = new Date().toISOString().slice(0, 7); // Mes actual "YYYY-MM"
+        monthsSet.add(todayStr);
+
+        allSales.forEach(s => { if(s.date) monthsSet.add(s.date.slice(0, 7)); });
+        allExpenses.forEach(e => { if(e.date) monthsSet.add(e.date.slice(0, 7)); });
+
+        const sortedMonths = Array.from(monthsSet).sort().reverse(); // Del más nuevo al más viejo
+
+        // 3. Inicializar selector de meses (solo una vez o si cambia la cantidad de meses)
+        const selector = document.getElementById('performance-month-select');
+        if (selector) {
+            const currentSelected = selector.value || todayStr;
+            selector.innerHTML = sortedMonths.map(m => {
+                const [year, month] = m.split('-');
+                const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+                const label = `${monthNames[parseInt(month) - 1]} ${year}`;
+                return `<option value="${m}" ${m === currentSelected ? 'selected' : ''}>${label}</option>`;
+            }).join('');
+
+            if (!metricsSelectorInitialized) {
+                selector.addEventListener('change', () => calculateAndRenderMetrics(selector.value, allSales, allExpenses, allProducts));
+                metricsSelectorInitialized = true;
+            }
+            
+            // Realizar cálculo inicial para el mes seleccionado
+            calculateAndRenderMetrics(selector.value || todayStr, allSales, allExpenses, allProducts);
+        }
+    } catch (err) {
+        console.error("Error al cargar métricas de performance:", err);
+    }
+}
+
+async function calculateAndRenderMetrics(targetMonth, sales, expenses, products) {
+    // Filtrar Ventas del mes seleccionado
+    const monthlySales = sales.filter(s => s.date && s.date.slice(0, 7) === targetMonth);
+    
+    // Filtrar Gastos del mes seleccionado
+    const monthlyExpenses = expenses.filter(e => e.date && e.date.slice(0, 7) === targetMonth);
+
+    // --- A) CÁLCULO DE INGRESOS BRUTOS POR PRODUCTO ---
+    const productSalesMap = {}; // { product_name: { qty: 0, revenue: 0 } }
+    let totalIngresosBrutos = 0;
+    let totalGTR = 0; // Gasto Total Real (Sumatoria de GPU * unidades vendidas)
+
+    // Necesitamos consultar los items detallados de cada venta del mes para saber el producto exacto y su costo real
+    const saleDetailsPromises = monthlySales.map(s => fetch(`${API_URL}/sales/${s.id}/items`).then(res => res.json()));
+    const allMonthlySaleItems = await Promise.all(saleDetailsPromises);
+
+    allMonthlySaleItems.forEach((items) => {
+        items.forEach(item => {
+            const flavor = item.product || "PRODUCTO DESCONOCIDO";
+            const qty = item.quantity || 0;
+            const subtotal = item.subtotal || 0;
+            const unitGpu = item.gpu || 0;
+            const itemCost = unitGpu * qty;
+
+            if (!productSalesMap[flavor]) {
+                productSalesMap[flavor] = { qty: 0, revenue: 0 };
+            }
+            productSalesMap[flavor].qty += qty;
+            productSalesMap[flavor].revenue += subtotal;
+
+            totalGTR += itemCost;
+            totalIngresosBrutos += subtotal;
+        });
+    });
+
+    // Renderizar Ingresos por Producto en la tabla
+    const ingresosTbody = document.getElementById('perf-ingresos-productos-tbody');
+    if (ingresosTbody) {
+        const sortedProducts = Object.keys(productSalesMap).sort();
+        if (sortedProducts.length === 0) {
+            ingresosTbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted);">Sin ventas en este período</td></tr>`;
+        } else {
+            ingresosTbody.innerHTML = sortedProducts.map(prod => {
+                const data = productSalesMap[prod];
+                return `<tr>
+                    <td><strong>${prod}</strong></td>
+                    <td style="text-align: center; font-weight: 600;">${data.qty} u.</td>
+                    <td style="text-align: right; font-weight: 700; color: var(--positive);">$${data.revenue.toFixed(2)}</td>
+                </tr>`;
+            }).join('');
+        }
+    }
+
+    // --- B) CÁLCULO DE EGRESOS MENSUALES POR CATEGORÍA ---
+    // Categorías oficiales del sistema
+    const officialCategories = [
+        "SUELDOS", "INSUMOS", "UTENSILIOS", "PROGRAMAS", 
+        "SITIO WEB", "DISEÑADOR", "PACKAGING", "MARKETING"
+    ];
+    
+    const categoryExpensesMap = {};
+    officialCategories.forEach(cat => categoryExpensesMap[cat] = 0);
+    let totalEgresos = 0;
+    let totalCFP = 0; // Costos Fijos Periódicos (Sueldos, Programas, Sitio Web, Diseñador y Marketing)
+
+    monthlyExpenses.forEach(exp => {
+        const category = (exp.category || "").toUpperCase();
+        const total = parseFloat(exp.total) || 0;
+        
+        totalEgresos += total;
+        
+        // Sumar al mapa si está en nuestras categorías oficiales, o agrupar bajo "Otros" si no coincidiera
+        if (categoryExpensesMap.hasOwnProperty(category)) {
+            categoryExpensesMap[category] += total;
+        } else {
+            if (!categoryExpensesMap["OTROS"]) categoryExpensesMap["OTROS"] = 0;
+            categoryExpensesMap["OTROS"] += total;
+        }
+    });
+
+    // Calcular CFP
+    const fixedCategories = ["SUELDOS", "PROGRAMAS", "SITIO WEB", "DISEÑADOR", "MARKETING"];
+    fixedCategories.forEach(cat => {
+        totalCFP += categoryExpensesMap[cat] || 0;
+    });
+
+    // Renderizar Egresos en la tabla
+    const egresosTbody = document.getElementById('perf-egresos-categorias-tbody');
+    if (egresosTbody) {
+        egresosTbody.innerHTML = Object.keys(categoryExpensesMap).map(cat => {
+            const amount = categoryExpensesMap[cat];
+            return `<tr>
+                <td><strong>${cat}</strong></td>
+                <td style="text-align: right; font-weight: 700; color: ${amount > 0 ? '#f472b6' : 'var(--text-muted)'};">$${amount.toFixed(2)}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    // --- C) RENDERIZAR MÉTRICAS DE RENDIMIENTO REAL ---
+    const rendimientoReal = totalIngresosBrutos - totalGTR;
+    const margenRentabilidad = totalIngresosBrutos > 0 ? (rendimientoReal / totalIngresosBrutos * 100) : 0;
+
+    // Actualizar valores en tarjetas
+    const rendimientoEl = document.getElementById('perf-rendimiento-real');
+    if (rendimientoEl) {
+        rendimientoEl.textContent = `${rendimientoReal >= 0 ? '' : '-'}$${Math.abs(rendimientoReal).toFixed(2)}`;
+        rendimientoEl.className = rendimientoReal >= 0 ? 'value positive' : 'value negative';
+    }
+
+    const rentabilidadPorcentajeEl = document.getElementById('perf-rentabilidad-porcentaje');
+    if (rentabilidadPorcentajeEl) {
+        rentabilidadPorcentajeEl.innerHTML = `Margen de Ganancia Real: <strong style="color: ${margenRentabilidad >= 0 ? 'var(--positive)' : '#f472b6'};">${margenRentabilidad.toFixed(2)}%</strong>`;
+    }
+
+    document.getElementById('perf-total-ingresos').textContent = `$${totalIngresosBrutos.toFixed(2)}`;
+    document.getElementById('perf-total-gtr').textContent = `$${totalGTR.toFixed(2)}`;
+    document.getElementById('perf-total-cfp').textContent = `$${totalCFP.toFixed(2)}`;
+
+    // --- D) DISTRIBUCIÓN VISUAL DE GASTOS (GRÁFICO DE BARRAS) ---
+    const barsContainer = document.getElementById('expenses-bars');
+    if (barsContainer) {
+        barsContainer.innerHTML = '';
+        const maxExpense = Math.max(...Object.values(categoryExpensesMap), 1);
+        
+        Object.keys(categoryExpensesMap).forEach(cat => {
+            const amt = categoryExpensesMap[cat];
+            if (amt > 0) {
+                const percentage = (amt / maxExpense) * 100;
+                const row = document.createElement('div');
+                row.className = 'bar-row';
+                row.innerHTML = `
+                    <div class="bar-label">${cat}</div>
+                    <div style="flex: 1; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; height: 10px;">
+                        <div class="bar-fill" style="width: ${percentage}%; height: 100%;"></div>
+                    </div>
+                    <div class="bar-value">$${amt.toFixed(2)}</div>
+                `;
+                barsContainer.appendChild(row);
+            }
+        });
+        
+        if (barsContainer.children.length === 0) {
+            barsContainer.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 0.9rem;">Sin egresos en este período</div>`;
+        }
+    }
 }
 
 // Global init - Removed automatic row calls to prevent errors on empty data
