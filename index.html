@@ -64,6 +64,15 @@
 
             <!-- PERFORMANCE -->
             <section id="sec-performance" class="section active">
+                <!-- Tarjeta Exclusiva de CTR (Capital Total Restante) - SIEMPRE visible y libre de bloqueo -->
+                <div class="card" style="margin-bottom: 20px; padding: 20px 24px; background: rgba(192, 132, 252, 0.05); border: 1px solid rgba(192, 132, 252, 0.2); border-radius: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+                    <div>
+                        <h3 style="margin: 0; font-size: 0.9rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px;">CTR (Capital Total Restante)</h3>
+                        <p style="font-size: 0.75rem; color: var(--text-muted); margin: 4px 0 0 0;">Histórico acumulado: Ventas Totales - Gastos Totales Reales</p>
+                    </div>
+                    <div class="value positive" id="perf-ctr-valor" style="font-size: 2.2rem; font-weight: 800; text-shadow: 0 0 15px rgba(192, 132, 252, 0.3);">$0.00</div>
+                </div>
+
                 <!-- Filtro de navegación superior -->
                 <div class="card" style="margin-bottom: 20px; padding: 15px 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
                     <h3 style="margin: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
@@ -71,84 +80,90 @@
                     </h3>
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <label for="performance-month-select" style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted);">MES / AÑO:</label>
-                        <select id="performance-month-select" style="padding: 8px 16px; background: #2a2640; border: 1px solid var(--surface-border); border-radius: 8px; color: white; cursor: pointer;"></select>
+                        <select id="performance-month-select" style="padding: 8px 16px; background: #2a2640; border: 1px solid var(--surface-border); border-radius: 8px; color: white; cursor: pointer;">
+                            <option value="">Seleccionar mes...</option>
+                        </select>
                     </div>
                 </div>
 
-                <!-- Tarjeta Principal de Rendimiento Real (Rentabilidad Neta) -->
-                <div class="card highlight" style="text-align: center; padding: 35px 20px; border-radius: 20px; background: linear-gradient(135deg, rgba(192, 132, 252, 0.15) 0%, rgba(51, 47, 75, 0.6) 100%); border: 1px solid rgba(192, 132, 252, 0.3); margin-bottom: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
-                    <h3 style="font-size: 0.95rem; color: var(--text-muted); text-transform: uppercase; margin: 0 0 15px 0; letter-spacing: 2px; font-weight: 600;">Rendimiento Real (Rentabilidad Neta)</h3>
-                    <div class="value positive" id="perf-rendimiento-real" style="font-size: 3.5rem; font-weight: 800; text-shadow: 0 0 20px rgba(192, 132, 252, 0.4); margin-bottom: 10px;">$0.00</div>
-                    <div style="font-size: 0.9rem; color: var(--text-muted);" id="perf-rentabilidad-porcentaje">Margen: 0.00%</div>
+                <!-- Contenedor del Cartel Bloqueado Inicial -->
+                <div id="perf-blocked-msg" class="card" style="display: block; text-align: center; padding: 60px 20px; border-radius: 16px; border: 1px dashed var(--surface-border); background: rgba(0,0,0,0.15);">
+                    <span class="material-symbols-outlined" style="font-size: 3.5rem; color: var(--primary); margin-bottom: 15px;">query_stats</span>
+                    <h2 style="font-size: 1.4rem; font-weight: 600; margin: 0 0 10px 0;">Movimientos del Período</h2>
+                    <p style="color: var(--text-muted); font-size: 0.95rem; margin: 0;">Seleccione un mes para ver los movimientos</p>
                 </div>
 
-                <!-- Tarjetas de Métricas de Apoyo -->
-                <div class="cards-grid" style="margin-bottom: 24px;">
-                    <div class="card metric-card" style="border-radius: 16px;">
-                        <h3>Total Ingresos Brutos</h3>
-                        <div class="value positive" id="perf-total-ingresos" style="font-size: 1.8rem; font-weight: 700;">$0.00</div>
-                        <p style="font-size: 0.75rem; color: var(--text-muted); margin: 5px 0 0 0;">Total facturado sin descontar costos</p>
+                <!-- Contenedor del Contenido de Métricas del Mes (Oculto al inicio) -->
+                <div id="perf-data-container" style="display: none;">
+                    <!-- Tarjeta Principal de RNA (Rentabilidad Neta Aproximada) -->
+                    <div class="card highlight" style="text-align: center; padding: 35px 20px; border-radius: 20px; background: linear-gradient(135deg, rgba(192, 132, 252, 0.15) 0%, rgba(51, 47, 75, 0.6) 100%); border: 1px solid rgba(192, 132, 252, 0.3); margin-bottom: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
+                        <h3 style="font-size: 0.95rem; color: var(--text-muted); text-transform: uppercase; margin: 0 0 15px 0; letter-spacing: 2px; font-weight: 600;">RNA (Rentabilidad Neta Aproximada)</h3>
+                        <div class="value positive" id="perf-rendimiento-real" style="font-size: 3.5rem; font-weight: 800; text-shadow: 0 0 20px rgba(192, 132, 252, 0.4); margin-bottom: 10px;">0.00%</div>
+                        <div style="font-size: 0.95rem; color: var(--text-muted);" id="perf-rentabilidad-porcentaje">Margen estimado de ganancia neta</div>
                     </div>
-                    <div class="card metric-card" style="border-radius: 16px;">
-                        <h3>GTR (Gasto Total Real)</h3>
-                        <div class="value negative" id="perf-total-gtr" style="font-size: 1.8rem; font-weight: 700; color: #f472b6;">$0.00</div>
-                        <p style="font-size: 0.75rem; color: var(--text-muted); margin: 5px 0 0 0;">Sumatoria de GPU × Unidades vendidas</p>
-                    </div>
-                    <div class="card metric-card" style="border-radius: 16px;">
-                        <h3>CFP (Costos Fijos Periódicos)</h3>
-                        <div class="value negative" id="perf-total-cfp" style="font-size: 1.8rem; font-weight: 700; color: #f472b6;">$0.00</div>
-                        <p style="font-size: 0.75rem; color: var(--text-muted); margin: 5px 0 0 0;">Sueldos, Programas, Web, Diseñador y Mkt</p>
-                    </div>
-                </div>
 
-                <!-- Grid de Desgloses (Ingresos vs Egresos) -->
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px;" class="perf-details-grid">
-                    <!-- A) SECCIÓN DE INGRESOS BRUTOS POR PRODUCTO -->
-                    <div class="card" style="margin-bottom: 0;">
-                        <h3 style="display: flex; align-items: center; gap: 8px;">
-                            <span class="material-symbols-outlined" style="color: var(--positive);">trending_up</span> INGRESOS POR PRODUCTO
-                        </h3>
-                        <div class="table-container" style="background: transparent; border: none; margin-top: 15px;">
-                            <table class="data-table" style="font-size: 0.85rem;">
-                                <thead>
-                                    <tr>
-                                        <th>PRODUCTO</th>
-                                        <th style="text-align: center;">UNIDADES</th>
-                                        <th style="text-align: right;">INGRESOS BRUTOS</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="perf-ingresos-productos-tbody">
-                                    <tr><td colspan="3" style="text-align: center; color: var(--text-muted);">Cargando...</td></tr>
-                                </tbody>
-                            </table>
+                    <!-- Tarjetas de Métricas de Apoyo -->
+                    <div class="cards-grid" style="margin-bottom: 24px;">
+                        <div class="card metric-card" style="border-radius: 16px;">
+                            <h3>Total Ingresos Brutos</h3>
+                            <div class="value positive" id="perf-total-ingresos" style="font-size: 1.8rem; font-weight: 700;">$0.00</div>
+                            <p style="font-size: 0.75rem; color: var(--text-muted); margin: 5px 0 0 0;">Ingresos totales del mes</p>
+                        </div>
+                        <div class="card metric-card" style="border-radius: 16px;">
+                            <h3>GTR (Gasto Total Real)</h3>
+                            <div class="value negative" id="perf-total-gtr" style="font-size: 1.8rem; font-weight: 700; color: #f472b6;">$0.00</div>
+                            <p style="font-size: 0.75rem; color: var(--text-muted); margin: 5px 0 0 0;">Sumatoria de unidades vendidas × GPU</p>
+                        </div>
+                        <div class="card metric-card" style="border-radius: 16px;">
+                            <h3>Total Egresos Reales</h3>
+                            <div class="value negative" id="perf-total-egresos" style="font-size: 1.8rem; font-weight: 700; color: #f472b6;">$0.00</div>
+                            <p style="font-size: 0.75rem; color: var(--text-muted); margin: 5px 0 0 0;">Suma de gastos reales del mes</p>
                         </div>
                     </div>
 
-                    <!-- B) SECCIÓN DE EGRESOS MENSUALES POR CATEGORÍA -->
-                    <div class="card" style="margin-bottom: 0;">
-                        <h3 style="display: flex; align-items: center; gap: 8px;">
-                            <span class="material-symbols-outlined" style="color: var(--negative);">trending_down</span> EGRESOS POR CATEGORÍA
-                        </h3>
-                        <div class="table-container" style="background: transparent; border: none; margin-top: 15px;">
-                            <table class="data-table" style="font-size: 0.85rem;">
-                                <thead>
-                                    <tr>
-                                        <th>CATEGORÍA</th>
-                                        <th style="text-align: right;">EGRESO REAL</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="perf-egresos-categorias-tbody">
-                                    <tr><td colspan="2" style="text-align: center; color: var(--text-muted);">Cargando...</td></tr>
-                                </tbody>
-                            </table>
+                    <!-- Grid de Desgloses (Ingresos vs Egresos) -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px;" class="perf-details-grid">
+                        <!-- A) SECCIÓN DE INGRESOS BRUTOS POR PRODUCTO -->
+                        <div class="card" style="margin-bottom: 0;">
+                            <h3 style="display: flex; align-items: center; gap: 8px;">
+                                <span class="material-symbols-outlined" style="color: var(--positive);">trending_up</span> INGRESOS POR PRODUCTO
+                            </h3>
+                            <div class="table-container" style="background: transparent; border: none; margin-top: 15px;">
+                                <table class="data-table" style="font-size: 0.85rem;">
+                                    <thead>
+                                        <tr>
+                                            <th>PRODUCTO</th>
+                                            <th style="text-align: center;">UNIDADES</th>
+                                            <th style="text-align: right;">INGRESOS BRUTOS</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="perf-ingresos-productos-tbody">
+                                        <tr><td colspan="3" style="text-align: center; color: var(--text-muted);">Seleccione un mes</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- B) SECCIÓN DE EGRESOS MENSUALES POR CATEGORÍA -->
+                        <div class="card" style="margin-bottom: 0;">
+                            <h3 style="display: flex; align-items: center; gap: 8px;">
+                                <span class="material-symbols-outlined" style="color: var(--negative);">trending_down</span> EGRESOS POR CATEGORÍA
+                            </h3>
+                            <div class="table-container" style="background: transparent; border: none; margin-top: 15px;">
+                                <table class="data-table" style="font-size: 0.85rem;">
+                                    <thead>
+                                        <tr>
+                                            <th>CATEGORÍA</th>
+                                            <th style="text-align: right;">EGRESO REAL</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="perf-egresos-categorias-tbody">
+                                        <tr><td colspan="2" style="text-align: center; color: var(--text-muted);">Seleccione un mes</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
-                </div>
-
-                <!-- Gráfico Visual de Gastos (Se conserva el original mejorado) -->
-                <div class="card">
-                    <h3>DISTRIBUCIÓN VISUAL DE GASTOS</h3>
-                    <div id="expenses-bars" class="bar-chart" style="margin-top: 15px;"></div>
                 </div>
             </section>
 

@@ -386,12 +386,12 @@ document.getElementById('provider-form').addEventListener('submit',async(e)=>{
 });
 async function deleteProvider(id){if(confirm('¿ELIMINAR ESTE PROVEEDOR?')){await fetch(`${API_URL}/providers/${id}`,{method:'DELETE'});loadProviders();}}
 
-// PERFORMANCE (Rendimiento Inteligente)
+// PERFORMANCE (Rendimiento Inteligente con Refacción de Lógica y Estado Inicial Bloqueado)
 let metricsSelectorInitialized = false;
 
 async function loadMetrics() {
     try {
-        // 1. Obtener ventas, gastos y productos actuales para calcular GTR y desgloses
+        // 1. Consumir asíncronamente ventas, gastos y productos existentes (sin tocar sus funciones)
         const [salesRes, expensesRes, productsRes] = await Promise.all([
             fetch(`${API_URL}/sales`),
             fetch(`${API_URL}/expenses`),
@@ -400,36 +400,73 @@ async function loadMetrics() {
         
         const allSales = await salesRes.json();
         const allExpenses = await expensesRes.json();
-        const allProducts = await productsRes.json(); // Para buscar el GPU actual o info extra si es necesario
+        const allProducts = await productsRes.json();
 
-        // 2. Extraer todos los meses disponibles del historial de Ventas y Gastos
+        // 2. EXCEPCIÓN DE BLOQUEO (CTR - Capital Total Restante): SIEMPRE calculado e independizado
+        // CTR = Suma de todas las ventas históricas - GTR histórico acumulado de las ventas
+        let totalVentasHistorico = 0;
+        let totalGTRHistorico = 0;
+
+        // Necesitamos consultar todos los items de cada venta histórica de forma asíncrona y robusta
+        const historicalDetailsPromises = allSales.map(s => fetch(`${API_URL}/sales/${s.id}/items`).then(res => res.json()).catch(() => []));
+        const allHistoricalSaleItems = await Promise.all(historicalDetailsPromises);
+
+        allHistoricalSaleItems.forEach((items, index) => {
+            // total_income acumulado histórico
+            const sale = allSales[index];
+            totalVentasHistorico += parseFloat(sale.total) || 0;
+
+            items.forEach(item => {
+                const qty = item.quantity || 0;
+                const unitGpu = item.gpu || 0;
+                totalGTRHistorico += (unitGpu * qty);
+            });
+        });
+
+        const ctr = totalVentasHistorico - totalGTRHistorico;
+        const ctrValorEl = document.getElementById('perf-ctr-valor');
+        if (ctrValorEl) {
+            ctrValorEl.textContent = `${ctr >= 0 ? '' : '-'}$${Math.abs(ctr).toFixed(2)}`;
+            ctrValorEl.className = ctr >= 0 ? 'value positive' : 'value negative';
+        }
+
+        // 3. DINAMISMO DEL SELECTOR: Sólo listar meses que REALMENTE tienen datos en Ventas o Gastos
         const monthsSet = new Set();
-        const todayStr = new Date().toISOString().slice(0, 7); // Mes actual "YYYY-MM"
-        monthsSet.add(todayStr);
-
         allSales.forEach(s => { if(s.date) monthsSet.add(s.date.slice(0, 7)); });
         allExpenses.forEach(e => { if(e.date) monthsSet.add(e.date.slice(0, 7)); });
 
         const sortedMonths = Array.from(monthsSet).sort().reverse(); // Del más nuevo al más viejo
 
-        // 3. Inicializar selector de meses (solo una vez o si cambia la cantidad de meses)
+        // 4. Inicializar selector interactivo
         const selector = document.getElementById('performance-month-select');
         if (selector) {
-            const currentSelected = selector.value || todayStr;
-            selector.innerHTML = sortedMonths.map(m => {
+            selector.innerHTML = '<option value="">Seleccionar mes...</option>' + sortedMonths.map(m => {
                 const [year, month] = m.split('-');
                 const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
                 const label = `${monthNames[parseInt(month) - 1]} ${year}`;
-                return `<option value="${m}" ${m === currentSelected ? 'selected' : ''}>${label}</option>`;
+                return `<option value="${m}">${label}</option>`;
             }).join('');
 
+            // Asegurar que partimos con las métricas del mes en estado bloqueado vacío
+            document.getElementById('perf-blocked-msg').style.display = 'block';
+            document.getElementById('perf-data-container').style.display = 'none';
+
             if (!metricsSelectorInitialized) {
-                selector.addEventListener('change', () => calculateAndRenderMetrics(selector.value, allSales, allExpenses, allProducts));
+                selector.addEventListener('change', () => {
+                    const selectedMonth = selector.value;
+                    if (!selectedMonth) {
+                        // Volver a estado bloqueado
+                        document.getElementById('perf-blocked-msg').style.display = 'block';
+                        document.getElementById('perf-data-container').style.display = 'none';
+                    } else {
+                        // Cargar y mostrar datos del mes seleccionado
+                        document.getElementById('perf-blocked-msg').style.display = 'none';
+                        document.getElementById('perf-data-container').style.display = 'block';
+                        calculateAndRenderMetrics(selectedMonth, allSales, allExpenses, allProducts);
+                    }
+                });
                 metricsSelectorInitialized = true;
             }
-            
-            // Realizar cálculo inicial para el mes seleccionado
-            calculateAndRenderMetrics(selector.value || todayStr, allSales, allExpenses, allProducts);
         }
     } catch (err) {
         console.error("Error al cargar métricas de performance:", err);
@@ -437,19 +474,17 @@ async function loadMetrics() {
 }
 
 async function calculateAndRenderMetrics(targetMonth, sales, expenses, products) {
-    // Filtrar Ventas del mes seleccionado
+    // Filtrar Ventas y Gastos del mes seleccionado
     const monthlySales = sales.filter(s => s.date && s.date.slice(0, 7) === targetMonth);
-    
-    // Filtrar Gastos del mes seleccionado
     const monthlyExpenses = expenses.filter(e => e.date && e.date.slice(0, 7) === targetMonth);
 
     // --- A) CÁLCULO DE INGRESOS BRUTOS POR PRODUCTO ---
-    const productSalesMap = {}; // { product_name: { qty: 0, revenue: 0 } }
+    const productSalesMap = {}; 
     let totalIngresosBrutos = 0;
-    let totalGTR = 0; // Gasto Total Real (Sumatoria de GPU * unidades vendidas)
+    let totalGTR = 0; // GTR (Gasto Total Real del mes) = Sumatoria de (Unidades Vendidas * GPU)
 
-    // Necesitamos consultar los items detallados de cada venta del mes para saber el producto exacto y su costo real
-    const saleDetailsPromises = monthlySales.map(s => fetch(`${API_URL}/sales/${s.id}/items`).then(res => res.json()));
+    // Consultar items detallados de las ventas del mes seleccionado
+    const saleDetailsPromises = monthlySales.map(s => fetch(`${API_URL}/sales/${s.id}/items`).then(res => res.json()).catch(() => []));
     const allMonthlySaleItems = await Promise.all(saleDetailsPromises);
 
     allMonthlySaleItems.forEach((items) => {
@@ -471,7 +506,7 @@ async function calculateAndRenderMetrics(targetMonth, sales, expenses, products)
         });
     });
 
-    // Renderizar Ingresos por Producto en la tabla
+    // Renderizar tabla de Ingresos por Producto
     const ingresosTbody = document.getElementById('perf-ingresos-productos-tbody');
     if (ingresosTbody) {
         const sortedProducts = Object.keys(productSalesMap).sort();
@@ -489,8 +524,7 @@ async function calculateAndRenderMetrics(targetMonth, sales, expenses, products)
         }
     }
 
-    // --- B) CÁLCULO DE EGRESOS MENSUALES POR CATEGORÍA ---
-    // Categorías oficiales del sistema
+    // --- B) EGRESOS POR MES POR CATEGORÍA (8 categorías del sistema) ---
     const officialCategories = [
         "SUELDOS", "INSUMOS", "UTENSILIOS", "PROGRAMAS", 
         "SITIO WEB", "DISEÑADOR", "PACKAGING", "MARKETING"
@@ -499,7 +533,6 @@ async function calculateAndRenderMetrics(targetMonth, sales, expenses, products)
     const categoryExpensesMap = {};
     officialCategories.forEach(cat => categoryExpensesMap[cat] = 0);
     let totalEgresos = 0;
-    let totalCFP = 0; // Costos Fijos Periódicos (Sueldos, Programas, Sitio Web, Diseñador y Marketing)
 
     monthlyExpenses.forEach(exp => {
         const category = (exp.category || "").toUpperCase();
@@ -507,7 +540,6 @@ async function calculateAndRenderMetrics(targetMonth, sales, expenses, products)
         
         totalEgresos += total;
         
-        // Sumar al mapa si está en nuestras categorías oficiales, o agrupar bajo "Otros" si no coincidiera
         if (categoryExpensesMap.hasOwnProperty(category)) {
             categoryExpensesMap[category] += total;
         } else {
@@ -516,13 +548,7 @@ async function calculateAndRenderMetrics(targetMonth, sales, expenses, products)
         }
     });
 
-    // Calcular CFP
-    const fixedCategories = ["SUELDOS", "PROGRAMAS", "SITIO WEB", "DISEÑADOR", "MARKETING"];
-    fixedCategories.forEach(cat => {
-        totalCFP += categoryExpensesMap[cat] || 0;
-    });
-
-    // Renderizar Egresos en la tabla
+    // Renderizar tabla de Egresos
     const egresosTbody = document.getElementById('perf-egresos-categorias-tbody');
     if (egresosTbody) {
         egresosTbody.innerHTML = Object.keys(categoryExpensesMap).map(cat => {
@@ -534,53 +560,26 @@ async function calculateAndRenderMetrics(targetMonth, sales, expenses, products)
         }).join('');
     }
 
-    // --- C) RENDERIZAR MÉTRICAS DE RENDIMIENTO REAL ---
-    const rendimientoReal = totalIngresosBrutos - totalGTR;
-    const margenRentabilidad = totalIngresosBrutos > 0 ? (rendimientoReal / totalIngresosBrutos * 100) : 0;
+    // --- C) RNA (Rentabilidad Neta Aproximada) ---
+    // RNA = ((Ingresos - GTR) / Ingresos) * 100
+    const rna = totalIngresosBrutos > 0 ? ((totalIngresosBrutos - totalGTR) / totalIngresosBrutos * 100) : 0;
 
-    // Actualizar valores en tarjetas
     const rendimientoEl = document.getElementById('perf-rendimiento-real');
     if (rendimientoEl) {
-        rendimientoEl.textContent = `${rendimientoReal >= 0 ? '' : '-'}$${Math.abs(rendimientoReal).toFixed(2)}`;
-        rendimientoEl.className = rendimientoReal >= 0 ? 'value positive' : 'value negative';
+        rendimientoEl.textContent = `${rna.toFixed(2)}%`;
+        rendimientoEl.className = rna >= 0 ? 'value positive' : 'value negative';
     }
 
     const rentabilidadPorcentajeEl = document.getElementById('perf-rentabilidad-porcentaje');
     if (rentabilidadPorcentajeEl) {
-        rentabilidadPorcentajeEl.innerHTML = `Margen de Ganancia Real: <strong style="color: ${margenRentabilidad >= 0 ? 'var(--positive)' : '#f472b6'};">${margenRentabilidad.toFixed(2)}%</strong>`;
+        const margenPesos = totalIngresosBrutos - totalGTR;
+        rentabilidadPorcentajeEl.innerHTML = `Ganancia Estimada: <strong style="color: ${margenPesos >= 0 ? 'var(--positive)' : '#f472b6'};">${margenPesos >= 0 ? '' : '-'}$${Math.abs(margenPesos).toFixed(2)}</strong> (descontando GTR de $${totalGTR.toFixed(2)})`;
     }
 
+    // Actualizar tarjetas de apoyo
     document.getElementById('perf-total-ingresos').textContent = `$${totalIngresosBrutos.toFixed(2)}`;
     document.getElementById('perf-total-gtr').textContent = `$${totalGTR.toFixed(2)}`;
-    document.getElementById('perf-total-cfp').textContent = `$${totalCFP.toFixed(2)}`;
-
-    // --- D) DISTRIBUCIÓN VISUAL DE GASTOS (GRÁFICO DE BARRAS) ---
-    const barsContainer = document.getElementById('expenses-bars');
-    if (barsContainer) {
-        barsContainer.innerHTML = '';
-        const maxExpense = Math.max(...Object.values(categoryExpensesMap), 1);
-        
-        Object.keys(categoryExpensesMap).forEach(cat => {
-            const amt = categoryExpensesMap[cat];
-            if (amt > 0) {
-                const percentage = (amt / maxExpense) * 100;
-                const row = document.createElement('div');
-                row.className = 'bar-row';
-                row.innerHTML = `
-                    <div class="bar-label">${cat}</div>
-                    <div style="flex: 1; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; height: 10px;">
-                        <div class="bar-fill" style="width: ${percentage}%; height: 100%;"></div>
-                    </div>
-                    <div class="bar-value">$${amt.toFixed(2)}</div>
-                `;
-                barsContainer.appendChild(row);
-            }
-        });
-        
-        if (barsContainer.children.length === 0) {
-            barsContainer.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 0.9rem;">Sin egresos en este período</div>`;
-        }
-    }
+    document.getElementById('perf-total-egresos').textContent = `$${totalEgresos.toFixed(2)}`;
 }
 
 // Global init - Removed automatic row calls to prevent errors on empty data
