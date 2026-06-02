@@ -62,8 +62,8 @@ async function loadEscandalloTable(){
     const tbody=document.getElementById('escandallo-tbody');tbody.innerHTML='';
     for(const prod of products){
         const ingredients=await(await fetch(`${API_URL}/recipes/${prod.id}`)).json();
-        const ingHtml=ingredients.map(ing=>`<tr class="ingredient-row row-prod-${prod.id}"><td></td><td style="padding-left:30px;color:var(--text-muted);"><span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">subdirectory_arrow_right</span> ${ing.name}</td><td colspan="2" class="text-muted">Cant: ${ing.quantity}</td><td colspan="2" class="text-muted">$${(ing.quantity*ing.cost).toFixed(2)}</td></tr>`).join('');
-        tbody.innerHTML+=`<tr class="group-header"><td style="text-align:center;">${ingredients.length>0?`<span class="material-symbols-outlined toggle-btn" onclick="toggleIng(${prod.id},this)">expand_more</span>`:''}</td><td><strong>${prod.name}</strong></td><td>${prod.yield||1}</td><td>$${prod.price.toFixed(2)}</td><td><strong style="color:var(--primary);">$${prod.gpu.toFixed(2)}</strong></td><td style="white-space:nowrap;"><button class="btn secondary outline btn-icon" onclick="editProduct(${prod.id},'${prod.name}',${prod.price},${prod.yield||1})" title="Editar"><span class="material-symbols-outlined">edit</span></button> <button class="btn secondary outline btn-icon" onclick="deleteProduct(${prod.id})" title="Eliminar"><span class="material-symbols-outlined">delete</span></button></td></tr>${ingHtml}`;
+        const ingHtml=ingredients.map(ing=>`<tr class="ingredient-row row-prod-${prod.id}"><td></td><td style="padding-left:30px;color:var(--text-muted);"><span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">subdirectory_arrow_right</span> ${ing.name}</td><td colspan="3" class="text-muted">Cant: ${ing.quantity}</td><td colspan="2" class="text-muted">$${(ing.quantity*ing.cost).toFixed(2)}</td></tr>`).join('');
+        tbody.innerHTML+=`<tr class="group-header"><td style="text-align:center;">${ingredients.length>0?`<span class="material-symbols-outlined toggle-btn" onclick="toggleIng(${prod.id},this)">expand_more</span>`:''}</td><td><strong>${prod.name}</strong></td><td>${prod.yield||1}</td><td style="text-align:center;">${prod.min_stock||0} u.</td><td>$${prod.price.toFixed(2)}</td><td><strong style="color:var(--primary);">$${prod.gpu.toFixed(2)}</strong></td><td style="white-space:nowrap;"><button class="btn secondary outline btn-icon" onclick="editProduct(${prod.id},'${prod.name}',${prod.price},${prod.yield||1},${prod.min_stock||0})" title="Editar"><span class="material-symbols-outlined">edit</span></button> <button class="btn secondary outline btn-icon" onclick="deleteProduct(${prod.id})" title="Eliminar"><span class="material-symbols-outlined">delete</span></button></td></tr>${ingHtml}`;
     }
 }
 function toggleIng(id,el){document.querySelectorAll(`.row-prod-${id}`).forEach(r=>r.classList.toggle('show'));el.textContent=el.textContent==='expand_more'?'expand_less':'expand_more';}
@@ -94,25 +94,29 @@ function updateEscTotals(){
 }
 document.getElementById('esc-yield').addEventListener('input',updateEscTotals);
 let editingProductId=null;
-function editProduct(id,name,price,yld){
+function editProduct(id,name,price,yld,minStock){
     editingProductId=id;
-    document.getElementById('esc-sabor').value=name;document.getElementById('esc-sale-price').value=price;document.getElementById('esc-yield').value=yld;
+    document.getElementById('esc-sabor').value=name;
+    document.getElementById('esc-sale-price').value=price;
+    document.getElementById('esc-yield').value=yld;
+    document.getElementById('esc-min-stock').value=minStock || 0;
     escCont.innerHTML='';document.getElementById('cancel-edit-product-btn').style.display='inline-flex';
     fetch(`${API_URL}/recipes/${id}`).then(r=>r.json()).then(items=>{items.forEach(i=>addEscRow(i.name,i.quantity));if(!items.length)addEscRow();updateEscTotals();});
     window.scrollTo({top:0,behavior:'smooth'});
 }
-document.getElementById('cancel-edit-product-btn').addEventListener('click',()=>{editingProductId=null;document.getElementById('escandallo-form').reset();escCont.innerHTML='';addEscRow();updateEscTotals();document.getElementById('cancel-edit-product-btn').style.display='none';});
+document.getElementById('cancel-edit-product-btn').addEventListener('click',()=>{editingProductId=null;document.getElementById('escandallo-form').reset();document.getElementById('esc-min-stock').value=0;escCont.innerHTML='';addEscRow();updateEscTotals();document.getElementById('cancel-edit-product-btn').style.display='none';});
 document.getElementById('escandallo-form').addEventListener('submit',async(e)=>{
     e.preventDefault();
     const sabor=document.getElementById('esc-sabor').value.trim().toUpperCase();
     const price=parseFloat(document.getElementById('esc-sale-price').value);
     const yld=parseFloat(document.getElementById('esc-yield').value);
+    const minStock=parseInt(document.getElementById('esc-min-stock').value) || 0;
     let productId=editingProductId;
     if(!productId){
-        await fetch(`${API_URL}/products`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({flavor_name:sabor,sale_price:price,yield_per_batch:yld})});
+        await fetch(`${API_URL}/products`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({flavor_name:sabor,sale_price:price,yield_per_batch:yld,min_stock:minStock})});
         productId=(await(await fetch(`${API_URL}/products`)).json()).find(p=>p.name.toLowerCase()===sabor.toLowerCase())?.id;
     } else {
-        await fetch(`${API_URL}/products/${productId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({flavor_name:sabor,sale_price:price,yield_per_batch:yld})});
+        await fetch(`${API_URL}/products/${productId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({flavor_name:sabor,sale_price:price,yield_per_batch:yld,min_stock:minStock})});
     }
     const items=[];
     for(const row of document.querySelectorAll('.esc-row')){
@@ -387,8 +391,7 @@ document.getElementById('provider-form').addEventListener('submit',async(e)=>{
 async function deleteProvider(id){if(confirm('¿ELIMINAR ESTE PROVEEDOR?')){await fetch(`${API_URL}/providers/${id}`,{method:'DELETE'});loadProviders();}}
 
 // PERFORMANCE (Rendimiento Inteligente con Refacción de Lógica y Estado Inicial Bloqueado)
-let metricsSelectorInitialized = false;
-
+// PERFORMANCE (Rendimiento Inteligente con Refacción de Lógica y Estado Inicial Bloqueado)
 async function loadMetrics() {
     try {
         // 1. Consumir asíncronamente ventas, gastos y productos existentes (sin tocar sus funciones)
@@ -402,25 +405,15 @@ async function loadMetrics() {
         const allExpenses = await expensesRes.json();
         const allProducts = await productsRes.json();
 
-        // 2. EXCEPCIÓN DE BLOQUEO (CTR - Capital Total Restante): SIEMPRE calculado e independizado
+        // 2. EXCEPCIÓN DE BLOQUEO (CTR - Capital Total Restante) y STOCK DISPONIBLE: SIEMPRE cargado
         // CTR = Suma de todas las ventas históricas - GTR histórico acumulado de las ventas
         let totalVentasHistorico = 0;
         let totalGTRHistorico = 0;
 
-        // Necesitamos consultar todos los items de cada venta histórica de forma asíncrona y robusta
-        const historicalDetailsPromises = allSales.map(s => fetch(`${API_URL}/sales/${s.id}/items`).then(res => res.json()).catch(() => []));
-        const allHistoricalSaleItems = await Promise.all(historicalDetailsPromises);
-
-        allHistoricalSaleItems.forEach((items, index) => {
-            // total_income acumulado histórico
-            const sale = allSales[index];
+        // Sumar directamente usando los campos optimizados devueltos por el backend (sin fetches concurrentes)
+        allSales.forEach(sale => {
             totalVentasHistorico += parseFloat(sale.total) || 0;
-
-            items.forEach(item => {
-                const qty = item.quantity || 0;
-                const unitGpu = item.gpu || 0;
-                totalGTRHistorico += (unitGpu * qty);
-            });
+            totalGTRHistorico += parseFloat(sale.gpu_total) || 0;
         });
 
         const ctr = totalVentasHistorico - totalGTRHistorico;
@@ -430,6 +423,31 @@ async function loadMetrics() {
             ctrValorEl.className = ctr >= 0 ? 'value positive' : 'value negative';
         }
 
+        // Cargar y renderizar stock disponible en tiempo real
+        const stockRes = await fetch(`${API_URL}/stock`);
+        const stockData = await stockRes.json();
+        const stockTbody = document.getElementById('perf-stock-tbody');
+        if (stockTbody) {
+            // Filtrar productos con stock > 0
+            const activeStock = stockData.filter(item => item.stock > 0);
+            if (activeStock.length === 0) {
+                stockTbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">Sin stock disponible en almacén</td></tr>`;
+            } else {
+                stockTbody.innerHTML = activeStock.map(item => {
+                    const minStockThreshold = item.min_stock || 0;
+                    const isLow = item.stock <= minStockThreshold;
+                    const badgeClass = isLow ? 'tag tag-red' : 'tag tag-green';
+                    const badgeText = isLow ? 'BAJO STOCK' : 'OK';
+                    return `<tr>
+                        <td><strong>${item.name}</strong></td>
+                        <td style="text-align: center; font-weight: 700; color: ${isLow ? '#ef4444' : 'var(--text)'};">${item.stock} u.</td>
+                        <td style="text-align: center; color: var(--text-muted);">${minStockThreshold} u.</td>
+                        <td style="text-align: right;"><span class="${badgeClass}">${badgeText}</span></td>
+                    </tr>`;
+                }).join('');
+            }
+        }
+
         // 3. DINAMISMO DEL SELECTOR: Sólo listar meses que REALMENTE tienen datos en Ventas o Gastos
         const monthsSet = new Set();
         allSales.forEach(s => { if(s.date) monthsSet.add(s.date.slice(0, 7)); });
@@ -437,9 +455,11 @@ async function loadMetrics() {
 
         const sortedMonths = Array.from(monthsSet).sort().reverse(); // Del más nuevo al más viejo
 
-        // 4. Inicializar selector interactivo
+        // 4. Inicializar selector interactivo de forma segura (clonando para limpiar listeners previos)
         const selector = document.getElementById('performance-month-select');
         if (selector) {
+            const currentValue = selector.value;
+
             selector.innerHTML = '<option value="">Seleccionar mes...</option>' + sortedMonths.map(m => {
                 const [year, month] = m.split('-');
                 const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
@@ -447,25 +467,35 @@ async function loadMetrics() {
                 return `<option value="${m}">${label}</option>`;
             }).join('');
 
-            // Asegurar que partimos con las métricas del mes en estado bloqueado vacío
-            document.getElementById('perf-blocked-msg').style.display = 'block';
-            document.getElementById('perf-data-container').style.display = 'none';
+            // Restaurar el valor si sigue siendo válido
+            if (currentValue && sortedMonths.includes(currentValue)) {
+                selector.value = currentValue;
+            }
 
-            if (!metricsSelectorInitialized) {
-                selector.addEventListener('change', () => {
-                    const selectedMonth = selector.value;
-                    if (!selectedMonth) {
-                        // Volver a estado bloqueado
-                        document.getElementById('perf-blocked-msg').style.display = 'block';
-                        document.getElementById('perf-data-container').style.display = 'none';
-                    } else {
-                        // Cargar y mostrar datos del mes seleccionado
-                        document.getElementById('perf-blocked-msg').style.display = 'none';
-                        document.getElementById('perf-data-container').style.display = 'block';
-                        calculateAndRenderMetrics(selectedMonth, allSales, allExpenses, allProducts);
-                    }
-                });
-                metricsSelectorInitialized = true;
+            // Clonar nodo para remover listeners previos del selector de forma limpia
+            const newSelector = selector.cloneNode(true);
+            selector.parentNode.replaceChild(newSelector, selector);
+
+            newSelector.addEventListener('change', () => {
+                const selectedMonth = newSelector.value;
+                if (!selectedMonth) {
+                    document.getElementById('perf-blocked-msg').style.display = 'block';
+                    document.getElementById('perf-data-container').style.display = 'none';
+                } else {
+                    document.getElementById('perf-blocked-msg').style.display = 'none';
+                    document.getElementById('perf-data-container').style.display = 'block';
+                    calculateAndRenderMetrics(selectedMonth, allSales, allExpenses, allProducts);
+                }
+            });
+
+            // Si hay un período seleccionado, calcular métricas inmediatamente
+            if (newSelector.value) {
+                document.getElementById('perf-blocked-msg').style.display = 'none';
+                document.getElementById('perf-data-container').style.display = 'block';
+                calculateAndRenderMetrics(newSelector.value, allSales, allExpenses, allProducts);
+            } else {
+                document.getElementById('perf-blocked-msg').style.display = 'block';
+                document.getElementById('perf-data-container').style.display = 'none';
             }
         }
     } catch (err) {
@@ -483,7 +513,7 @@ async function calculateAndRenderMetrics(targetMonth, sales, expenses, products)
     let totalIngresosBrutos = 0;
     let totalGTR = 0; // GTR (Gasto Total Real del mes) = Sumatoria de (Unidades Vendidas * GPU)
 
-    // Consultar items detallados de las ventas del mes seleccionado
+    // Consultar items detallados de las ventas del mes seleccionado (son pocas, no sobrecarga Neon)
     const saleDetailsPromises = monthlySales.map(s => fetch(`${API_URL}/sales/${s.id}/items`).then(res => res.json()).catch(() => []));
     const allMonthlySaleItems = await Promise.all(saleDetailsPromises);
 
@@ -561,7 +591,6 @@ async function calculateAndRenderMetrics(targetMonth, sales, expenses, products)
     }
 
     // --- C) RNA (Rentabilidad Neta Aproximada) ---
-    // RNA = ((Ingresos - GTR) / Ingresos) * 100
     const rna = totalIngresosBrutos > 0 ? ((totalIngresosBrutos - totalGTR) / totalIngresosBrutos * 100) : 0;
 
     const rendimientoEl = document.getElementById('perf-rendimiento-real');

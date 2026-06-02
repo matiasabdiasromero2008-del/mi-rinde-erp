@@ -100,6 +100,7 @@ class ProductModel(BaseModel):
     flavor_name: str
     sale_price: float
     yield_per_batch: float
+    min_stock: Optional[int] = 0
 
 class RecipeItem(BaseModel):
     ingredient_id: int
@@ -389,9 +390,9 @@ def add_product(req: ProductModel):
     cursor = conn.cursor()
     try:
         cursor.execute("""
-            INSERT INTO products (flavor_name, sale_price, yield_per_batch) 
-            VALUES (%s, %s, %s)
-        """, (req.flavor_name, req.sale_price, req.yield_per_batch))
+            INSERT INTO products (flavor_name, sale_price, yield_per_batch, min_stock) 
+            VALUES (%s, %s, %s, %s)
+        """, (req.flavor_name, req.sale_price, req.yield_per_batch, req.min_stock or 0))
         conn.commit()
         return {"success": True}
     except Exception as e: raise HTTPException(status_code=400, detail=str(e))
@@ -426,9 +427,9 @@ def update_product(product_id: int, req: ProductModel):
     try:
         cursor.execute("""
             UPDATE products 
-            SET flavor_name = %s, sale_price = %s, yield_per_batch = %s
+            SET flavor_name = %s, sale_price = %s, yield_per_batch = %s, min_stock = %s
             WHERE id = %s
-        """, (req.flavor_name, req.sale_price, req.yield_per_batch, product_id))
+        """, (req.flavor_name, req.sale_price, req.yield_per_batch, req.min_stock or 0, product_id))
         conn.commit()
         return {"success": True}
     except Exception as e:
@@ -540,7 +541,8 @@ def get_sales():
     cursor = conn.cursor()
     cursor.execute("""
         SELECT s.id, s.client_name, s.date, s.discount, s.total_income, 
-               (SELECT AVG(gpu_snapshot) FROM sale_items WHERE sale_id = s.id) as unit_gpu
+               (SELECT AVG(gpu_snapshot) FROM sale_items WHERE sale_id = s.id) as unit_gpu,
+               COALESCE(s.total_gpu_snapshot, 0) as total_gpu_snapshot
         FROM sales s ORDER BY s.date DESC
     """)
     results = cursor.fetchall()
@@ -549,7 +551,8 @@ def get_sales():
         "id": r[0], "client": r[1],
         "date": r[2].strftime("%Y-%m-%dT%H:%M") if r[2] else "",
         "discount": f"${abs(r[3]):.2f}" if r[3] < 0 else (f"{r[3]:g}%" if r[3] > 0 else "0%"),
-        "total": r[4], "gpu": r[5] or 0
+        "total": r[4], "gpu": r[5] or 0,
+        "gpu_total": r[6] or 0
     } for r in results]
 
 @app.get("/sales/{sale_id}/items")
@@ -597,13 +600,13 @@ def get_stock_all():
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT p.id, p.flavor_name, p.sale_price, COALESCE(s.quantity_remaining, 0)
+        SELECT p.id, p.flavor_name, p.sale_price, COALESCE(s.quantity_remaining, 0), COALESCE(p.min_stock, 0)
         FROM products p
         LEFT JOIN stock s ON p.id = s.product_id
     """)
     results = cursor.fetchall()
     conn.close()
-    return [{"id": r[0], "name": r[1], "price": r[2], "stock": r[3]} for r in results]
+    return [{"id": r[0], "name": r[1], "price": r[2], "stock": r[3], "min_stock": r[4]} for r in results]
 
 
 
@@ -732,10 +735,10 @@ def get_stock():
 def get_products():
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, flavor_name, sale_price, current_gpu, yield_per_batch FROM products")
+    cursor.execute("SELECT id, flavor_name, sale_price, current_gpu, yield_per_batch, min_stock FROM products")
     results = cursor.fetchall()
     conn.close()
-    return [{"id": r[0], "name": r[1], "price": r[2], "gpu": r[3], "yield": r[4]} for r in results]
+    return [{"id": r[0], "name": r[1], "price": r[2], "gpu": r[3], "yield": r[4], "min_stock": r[5] or 0} for r in results]
 
 @app.get("/categories")
 def get_categories():

@@ -73,6 +73,28 @@
                     <div class="value positive" id="perf-ctr-valor" style="font-size: 2.2rem; font-weight: 800; text-shadow: 0 0 15px rgba(192, 132, 252, 0.3);">$0.00</div>
                 </div>
 
+                <!-- Tabla Exclusiva de Stock Disponible - SIEMPRE visible y libre de bloqueo -->
+                <div class="card" style="margin-bottom: 20px; padding: 20px 24px; border: 1px solid var(--surface-border); border-radius: 16px;">
+                    <h3 style="margin: 0 0 15px 0; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                        <span class="material-symbols-outlined" style="color: var(--primary);">inventory_2</span> STOCK DISPONIBLE
+                    </h3>
+                    <div class="table-container" style="background: transparent; border: none;">
+                        <table class="data-table" style="font-size: 0.85rem;">
+                            <thead>
+                                <tr>
+                                    <th>PRODUCTO</th>
+                                    <th style="text-align: center;">STOCK RESTANTE</th>
+                                    <th style="text-align: center;">STOCK MÍNIMO</th>
+                                    <th style="text-align: right;">ESTADO</th>
+                                </tr>
+                            </thead>
+                            <tbody id="perf-stock-tbody">
+                                <tr><td colspan="4" style="text-align: center; color: var(--text-muted);">Cargando inventario...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <!-- Filtro de navegación superior -->
                 <div class="card" style="margin-bottom: 20px; padding: 15px 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
                     <h3 style="margin: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
@@ -360,6 +382,7 @@
                             <div class="input-group" style="flex:2"><label>NOMBRE DEL PRODUCTO</label><input type="text" id="esc-sabor" required placeholder="Ej: Mermelada de Higo"></div>
                             <div class="input-group"><label>PRECIO VENTA ($)</label><input type="number" step="0.01" id="esc-sale-price" required></div>
                             <div class="input-group"><label>RENDIMIENTO (FRASCOS)</label><input type="number" step="0.01" id="esc-yield" required value="1"></div>
+                            <div class="input-group"><label>STOCK MÍNIMO</label><input type="number" id="esc-min-stock" placeholder="Ej: 5" min="0" value="0"></div>
                         </div>
                         <div id="esc-items-container"></div>
                         <button type="button" id="esc-add-item-btn" class="btn secondary outline" style="width:auto;margin-top:10px;"><span class="material-symbols-outlined">add</span> AGREGAR INSUMO</button>
@@ -375,7 +398,7 @@
                     <h3>PLANILLA MAESTRA DE PRODUCTOS</h3>
                     <div class="table-container">
                         <table class="data-table">
-                            <thead><tr><th style="width:40px;"></th><th>PRODUCTO</th><th>RENDIMIENTO</th><th>PRECIO VENTA</th><th>GPU</th><th style="width:100px;">ACCIONES</th></tr></thead>
+                            <thead><tr><th style="width:40px;"></th><th>PRODUCTO</th><th>RENDIMIENTO</th><th>STOCK MÍN.</th><th>PRECIO VENTA</th><th>GPU</th><th style="width:100px;">ACCIONES</th></tr></thead>
                             <tbody id="escandallo-tbody"></tbody>
                         </table>
                     </div>

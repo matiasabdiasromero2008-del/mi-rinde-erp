@@ -40,6 +40,11 @@ def init_db():
     )
     ''')
 
+    try:
+        cursor.execute("ALTER TABLE products ADD COLUMN IF NOT EXISTS min_stock INTEGER DEFAULT 0;")
+    except Exception as e:
+        pass
+
     # Ingredients (Insumos)
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS ingredients (
