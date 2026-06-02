@@ -393,28 +393,41 @@ async function deleteProvider(id){if(confirm('¿ELIMINAR ESTE PROVEEDOR?')){awai
 // PERFORMANCE (Rendimiento Inteligente con Refacción de Lógica y Estado Inicial Bloqueado)
 // PERFORMANCE (Rendimiento Inteligente con Refacción de Lógica y Estado Inicial Bloqueado)
 async function loadMetrics() {
+    console.log("Iniciando carga de métricas de Performance...");
+    
+    let allSales = [];
+    let allExpenses = [];
+    let allProducts = [];
+    let stockData = [];
+
+    // 1. Consumir APIs con tolerancia a fallos
     try {
-        // 1. Consumir asíncronamente ventas, gastos y productos existentes (sin tocar sus funciones)
         const [salesRes, expensesRes, productsRes] = await Promise.all([
-            fetch(`${API_URL}/sales`),
-            fetch(`${API_URL}/expenses`),
-            fetch(`${API_URL}/products`)
+            fetch(`${API_URL}/sales`).catch(e => { console.error("Error fetching sales:", e); return { ok: false }; }),
+            fetch(`${API_URL}/expenses`).catch(e => { console.error("Error fetching expenses:", e); return { ok: false }; }),
+            fetch(`${API_URL}/products`).catch(e => { console.error("Error fetching products:", e); return { ok: false }; })
         ]);
         
-        const allSales = await salesRes.json();
-        const allExpenses = await expensesRes.json();
-        const allProducts = await productsRes.json();
+        allSales = salesRes.ok ? await salesRes.json().catch(() => []) : [];
+        allExpenses = expensesRes.ok ? await expensesRes.json().catch(() => []) : [];
+        allProducts = productsRes.ok ? await productsRes.json().catch(() => []) : [];
+    } catch (err) {
+        console.error("Fallo grave al consumir endpoints iniciales:", err);
+    }
 
-        // 2. EXCEPCIÓN DE BLOQUEO (CTR - Capital Total Restante) y STOCK DISPONIBLE: SIEMPRE cargado
-        // CTR = Suma de todas las ventas históricas - GTR histórico acumulado de las ventas
+    console.log("Datos obtenidos - Ventas:", allSales.length, "Gastos:", allExpenses.length, "Productos:", allProducts.length);
+
+    // 2. EXCEPCIÓN DE BLOQUEO (CTR): Calcularlo de forma segura
+    try {
         let totalVentasHistorico = 0;
         let totalGTRHistorico = 0;
 
-        // Sumar directamente usando los campos optimizados devueltos por el backend (sin fetches concurrentes)
-        allSales.forEach(sale => {
-            totalVentasHistorico += parseFloat(sale.total) || 0;
-            totalGTRHistorico += parseFloat(sale.gpu_total) || 0;
-        });
+        if (Array.isArray(allSales)) {
+            allSales.forEach(sale => {
+                totalVentasHistorico += parseFloat(sale.total) || 0;
+                totalGTRHistorico += parseFloat(sale.gpu_total) || 0;
+            });
+        }
 
         const ctr = totalVentasHistorico - totalGTRHistorico;
         const ctrValorEl = document.getElementById('perf-ctr-valor');
@@ -422,13 +435,23 @@ async function loadMetrics() {
             ctrValorEl.textContent = `${ctr >= 0 ? '' : '-'}$${Math.abs(ctr).toFixed(2)}`;
             ctrValorEl.className = ctr >= 0 ? 'value positive' : 'value negative';
         }
+        console.log("CTR calculado con éxito:", ctr);
+    } catch (e) {
+        console.error("Error al calcular CTR histórico:", e);
+        const ctrValorEl = document.getElementById('perf-ctr-valor');
+        if (ctrValorEl) {
+            ctrValorEl.textContent = "$0.00";
+            ctrValorEl.className = 'value negative';
+        }
+    }
 
-        // Cargar y renderizar stock disponible en tiempo real
-        const stockRes = await fetch(`${API_URL}/stock`);
-        const stockData = await stockRes.json();
+    // 3. STOCK DISPONIBLE: Cargar y renderizar de forma segura
+    try {
+        const stockRes = await fetch(`${API_URL}/stock`).catch(e => { console.error("Error fetching stock:", e); return { ok: false }; });
+        stockData = stockRes.ok ? await stockRes.json().catch(() => []) : [];
+
         const stockTbody = document.getElementById('perf-stock-tbody');
-        if (stockTbody) {
-            // Filtrar productos con stock > 0
+        if (stockTbody && Array.isArray(stockData)) {
             const activeStock = stockData.filter(item => item.stock > 0);
             if (activeStock.length === 0) {
                 stockTbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">Sin stock disponible en almacén</td></tr>`;
@@ -439,7 +462,7 @@ async function loadMetrics() {
                     const badgeClass = isLow ? 'tag tag-red' : 'tag tag-green';
                     const badgeText = isLow ? 'BAJO STOCK' : 'OK';
                     return `<tr>
-                        <td><strong>${item.name}</strong></td>
+                        <td><strong>${item.name || item.flavor || "PRODUCTO"}</strong></td>
                         <td style="text-align: center; font-weight: 700; color: ${isLow ? '#ef4444' : 'var(--text)'};">${item.stock} u.</td>
                         <td style="text-align: center; color: var(--text-muted);">${minStockThreshold} u.</td>
                         <td style="text-align: right;"><span class="${badgeClass}">${badgeText}</span></td>
@@ -447,25 +470,41 @@ async function loadMetrics() {
                 }).join('');
             }
         }
+        console.log("Stock disponible renderizado con éxito. Items:", stockData.length);
+    } catch (e) {
+        console.error("Error al cargar o renderizar Stock Disponible:", e);
+        const stockTbody = document.getElementById('perf-stock-tbody');
+        if (stockTbody) {
+            stockTbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); font-size: 0.8rem;">Ocurrió un error al cargar el inventario.</td></tr>`;
+        }
+    }
 
-        // 3. DINAMISMO DEL SELECTOR: Sólo listar meses que REALMENTE tienen datos en Ventas o Gastos
+    // 4. DINAMISMO DEL SELECTOR: Sólo listar meses que REALMENTE tienen datos
+    try {
         const monthsSet = new Set();
-        allSales.forEach(s => { if(s.date) monthsSet.add(s.date.slice(0, 7)); });
-        allExpenses.forEach(e => { if(e.date) monthsSet.add(e.date.slice(0, 7)); });
+        if (Array.isArray(allSales)) {
+            allSales.forEach(s => { if(s.date && s.date.length >= 7) monthsSet.add(s.date.slice(0, 7)); });
+        }
+        if (Array.isArray(allExpenses)) {
+            allExpenses.forEach(e => { if(e.date && e.date.length >= 7) monthsSet.add(e.date.slice(0, 7)); });
+        }
 
-        const sortedMonths = Array.from(monthsSet).sort().reverse(); // Del más nuevo al más viejo
+        const sortedMonths = Array.from(monthsSet).sort().reverse();
+        console.log("Meses detectados:", sortedMonths);
 
-        // 4. Inicializar selector interactivo de forma segura (clonando para limpiar listeners previos)
         const selector = document.getElementById('performance-month-select');
         if (selector) {
             const currentValue = selector.value;
 
             selector.innerHTML = '<option value="">Seleccionar mes...</option>' + sortedMonths.map(m => {
-                const [year, month] = m.split('-');
+                const parts = m.split('-');
+                if (parts.length < 2) return '';
+                const [year, month] = parts;
                 const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-                const label = `${monthNames[parseInt(month) - 1]} ${year}`;
+                const monthIdx = parseInt(month) - 1;
+                const label = `${monthNames[monthIdx] || 'Mes'} ${year}`;
                 return `<option value="${m}">${label}</option>`;
-            }).join('');
+            }).filter(Boolean).join('');
 
             // Restaurar el valor si sigue siendo válido
             if (currentValue && sortedMonths.includes(currentValue)) {
@@ -498,8 +537,9 @@ async function loadMetrics() {
                 document.getElementById('perf-data-container').style.display = 'none';
             }
         }
-    } catch (err) {
-        console.error("Error al cargar métricas de performance:", err);
+        console.log("Selector de meses inicializado con éxito.");
+    } catch (e) {
+        console.error("Error al inicializar el selector de meses:", e);
     }
 }
 

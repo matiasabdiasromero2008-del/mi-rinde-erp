@@ -42,8 +42,15 @@ def init_db():
 
     try:
         cursor.execute("ALTER TABLE products ADD COLUMN IF NOT EXISTS min_stock INTEGER DEFAULT 0;")
+        conn.commit()
     except Exception as e:
-        pass
+        conn.rollback()
+
+    try:
+        cursor.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS total_gpu_snapshot REAL DEFAULT 0;")
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
 
     # Ingredients (Insumos)
     cursor.execute('''
