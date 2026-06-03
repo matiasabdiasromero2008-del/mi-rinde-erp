@@ -1,6 +1,50 @@
 const API_URL='';
 let currentUser=null,allProviders=[],allIngredients=[],allClients=[],allStockProducts=[];
 
+// Variables de estado para el efecto de odómetro (contador)
+let currentCtr = 0;
+let currentTotalIngresos = 0;
+let currentTotalGtr = 0;
+let currentTotalEgresos = 0;
+let currentRna = 0;
+
+// Función de Odómetro Premium
+function animateNumberValue(id, start, end, duration = 800, prefix = "", suffix = "") {
+    const obj = document.getElementById(id);
+    if (!obj) return;
+    
+    // Si no es un número válido, mostrarlo directamente
+    const startNum = parseFloat(start);
+    const endNum = parseFloat(end);
+    if (isNaN(startNum) || isNaN(endNum)) {
+        obj.textContent = prefix + end + suffix;
+        return;
+    }
+    
+    let startTimestamp = null;
+    const step = (timestamp) => {
+        if (!startTimestamp) startTimestamp = timestamp;
+        const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+        const currentVal = progress * (endNum - startNum) + startNum;
+        
+        // Formatear como moneda de pesos con toLocaleString en español
+        obj.textContent = prefix + currentVal.toLocaleString('es-AR', { 
+            minimumFractionDigits: 2, 
+            maximumFractionDigits: 2 
+        }) + suffix;
+        
+        if (progress < 1) {
+            window.requestAnimationFrame(step);
+        } else {
+            obj.textContent = prefix + endNum.toLocaleString('es-AR', { 
+                minimumFractionDigits: 2, 
+                maximumFractionDigits: 2 
+            }) + suffix;
+        }
+    };
+    window.requestAnimationFrame(step);
+}
+
 function switchView(id){document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById(id).classList.add('active');}
 function setNow(id){const el=document.getElementById(id);if(el&&!el.value){const n=new Date();n.setMinutes(n.getMinutes()-n.getTimezoneOffset());el.value=n.toISOString().slice(0,16);}}
 
@@ -63,7 +107,8 @@ async function loadEscandalloTable(){
     for(const prod of products){
         const ingredients=await(await fetch(`${API_URL}/recipes/${prod.id}`)).json();
         const ingHtml=ingredients.map(ing=>`<tr class="ingredient-row row-prod-${prod.id}"><td></td><td style="padding-left:30px;color:var(--text-muted);"><span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">subdirectory_arrow_right</span> ${ing.name}</td><td colspan="3" class="text-muted">Cant: ${ing.quantity}</td><td colspan="2" class="text-muted">$${(ing.quantity*ing.cost).toFixed(2)}</td></tr>`).join('');
-        tbody.innerHTML+=`<tr class="group-header"><td style="text-align:center;">${ingredients.length>0?`<span class="material-symbols-outlined toggle-btn" onclick="toggleIng(${prod.id},this)">expand_more</span>`:''}</td><td><strong>${prod.name}</strong></td><td>${prod.yield||1}</td><td style="text-align:center;">${prod.min_stock||0} u.</td><td>$${prod.price.toFixed(2)}</td><td><strong style="color:var(--primary);">$${prod.gpu.toFixed(2)}</strong></td><td style="white-space:nowrap;"><button class="btn secondary outline btn-icon" onclick="editProduct(${prod.id},'${prod.name}',${prod.price},${prod.yield||1},${prod.min_stock||0})" title="Editar"><span class="material-symbols-outlined">edit</span></button> <button class="btn secondary outline btn-icon" onclick="deleteProduct(${prod.id})" title="Eliminar"><span class="material-symbols-outlined">delete</span></button></td></tr>${ingHtml}`;
+        const minStockText = (prod.min_stock && prod.min_stock > 0) ? `${prod.min_stock} u.` : '-';
+        tbody.innerHTML+=`<tr class="group-header"><td style="text-align:center;">${ingredients.length>0?`<span class="material-symbols-outlined toggle-btn" onclick="toggleIng(${prod.id},this)">expand_more</span>`:''}</td><td><strong>${prod.name}</strong></td><td>${prod.yield||1}</td><td style="text-align:center; font-weight: 600;">${minStockText}</td><td>$${prod.price.toFixed(2)}</td><td><strong style="color:var(--primary);">$${prod.gpu.toFixed(2)}</strong></td><td style="white-space:nowrap;"><button class="btn secondary outline btn-icon" onclick="editProduct(${prod.id},'${prod.name}',${prod.price},${prod.yield||1},${prod.min_stock||0})" title="Editar"><span class="material-symbols-outlined">edit</span></button> <button class="btn secondary outline btn-icon" onclick="deleteProduct(${prod.id})" title="Eliminar"><span class="material-symbols-outlined">delete</span></button></td></tr>${ingHtml}`;
     }
 }
 function toggleIng(id,el){document.querySelectorAll(`.row-prod-${id}`).forEach(r=>r.classList.toggle('show'));el.textContent=el.textContent==='expand_more'?'expand_less':'expand_more';}
@@ -107,27 +152,53 @@ function editProduct(id,name,price,yld,minStock){
 document.getElementById('cancel-edit-product-btn').addEventListener('click',()=>{editingProductId=null;document.getElementById('escandallo-form').reset();document.getElementById('esc-min-stock').value=0;escCont.innerHTML='';addEscRow();updateEscTotals();document.getElementById('cancel-edit-product-btn').style.display='none';});
 document.getElementById('escandallo-form').addEventListener('submit',async(e)=>{
     e.preventDefault();
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalHtml = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="material-symbols-outlined animate-spin" style="font-size:1.1rem;vertical-align:middle;">sync</span> GUARDANDO...';
+
     const sabor=document.getElementById('esc-sabor').value.trim().toUpperCase();
     const price=parseFloat(document.getElementById('esc-sale-price').value);
     const yld=parseFloat(document.getElementById('esc-yield').value);
     const minStock=parseInt(document.getElementById('esc-min-stock').value) || 0;
     let productId=editingProductId;
-    if(!productId){
-        await fetch(`${API_URL}/products`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({flavor_name:sabor,sale_price:price,yield_per_batch:yld,min_stock:minStock})});
-        productId=(await(await fetch(`${API_URL}/products`)).json()).find(p=>p.name.toLowerCase()===sabor.toLowerCase())?.id;
-    } else {
-        await fetch(`${API_URL}/products/${productId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({flavor_name:sabor,sale_price:price,yield_per_batch:yld,min_stock:minStock})});
+    try {
+        if(!productId){
+            await fetch(`${API_URL}/products`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({flavor_name:sabor,sale_price:price,yield_per_batch:yld,min_stock:minStock})});
+            productId=(await(await fetch(`${API_URL}/products`)).json()).find(p=>p.name.toLowerCase()===sabor.toLowerCase())?.id;
+        } else {
+            await fetch(`${API_URL}/products/${productId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({flavor_name:sabor,sale_price:price,yield_per_batch:yld,min_stock:minStock})});
+        }
+        const items=[];
+        for(const row of document.querySelectorAll('.esc-row')){
+            const name=row.querySelector('.esc-item-name').value.trim();const qty=parseFloat(row.querySelector('.esc-item-qty').value);
+            if(!name||isNaN(qty))continue;
+            let ing=allIngredients.find(i=>i.name.toLowerCase()===name.toLowerCase());
+            if(!ing){await fetch(`${API_URL}/ingredients`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name.toUpperCase()})});await loadIngredientsCache();ing=allIngredients.find(i=>i.name.toLowerCase()===name.toLowerCase());}
+            if(ing)items.push({ingredient_id:ing.id,quantity:qty});
+        }
+        const res=await fetch(`${API_URL}/recipes`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({product_id:productId,yield_per_batch:yld,items})});
+        if(res.ok){
+            submitBtn.style.background = "var(--positive)";
+            submitBtn.style.color = "white";
+            submitBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:1.1rem;vertical-align:middle;">check</span> ¡PRODUCTO GUARDADO!';
+            
+            setTimeout(()=>{
+                submitBtn.disabled = false;
+                submitBtn.style.background = "";
+                submitBtn.style.color = "";
+                submitBtn.innerHTML = originalHtml;
+                
+                e.target.reset();escCont.innerHTML='';addEscRow();editingProductId=null;document.getElementById('cancel-edit-product-btn').style.display='none';loadEscandalloTable();const m=document.getElementById('esc-msg');m.textContent='PRODUCTO GUARDADO';m.className='success-msg';setTimeout(()=>m.textContent='',3000);
+            }, 1500);
+        } else {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalHtml;
+        }
+    } catch(err) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalHtml;
     }
-    const items=[];
-    for(const row of document.querySelectorAll('.esc-row')){
-        const name=row.querySelector('.esc-item-name').value.trim();const qty=parseFloat(row.querySelector('.esc-item-qty').value);
-        if(!name||isNaN(qty))continue;
-        let ing=allIngredients.find(i=>i.name.toLowerCase()===name.toLowerCase());
-        if(!ing){await fetch(`${API_URL}/ingredients`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name.toUpperCase()})});await loadIngredientsCache();ing=allIngredients.find(i=>i.name.toLowerCase()===name.toLowerCase());}
-        if(ing)items.push({ingredient_id:ing.id,quantity:qty});
-    }
-    const res=await fetch(`${API_URL}/recipes`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({product_id:productId,yield_per_batch:yld,items})});
-    if(res.ok){e.target.reset();escCont.innerHTML='';addEscRow();editingProductId=null;document.getElementById('cancel-edit-product-btn').style.display='none';loadEscandalloTable();const m=document.getElementById('esc-msg');m.textContent='PRODUCTO GUARDADO';m.className='success-msg';setTimeout(()=>m.textContent='',3000);}
 });
 async function deleteProduct(id){
     if(confirm('¿ELIMINAR ESTE PRODUCTO?')){
@@ -191,6 +262,11 @@ document.getElementById('sale-discount-type').addEventListener('change',updateSa
 
 document.getElementById('sale-form').addEventListener('submit',async(e)=>{
     e.preventDefault();
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalHtml = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="material-symbols-outlined animate-spin" style="font-size:1.1rem;vertical-align:middle;">sync</span> GUARDANDO...';
+
     const items=[];
     document.querySelectorAll('.sale-row').forEach(row=>{
         const pId=row.querySelector('.sale-item-prod').value;
@@ -203,10 +279,29 @@ document.getElementById('sale-form').addEventListener('submit',async(e)=>{
         discount:getDiscountValueToSend(),
         date:document.getElementById('sale-date').value
     };
-    const res=await fetch(`${API_URL}/sales`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    if(res.ok){
-        e.target.reset();saleCont.innerHTML='';addSaleRow();setNow('sale-date');loadSalesHistory();
-        const m=document.getElementById('sale-msg');m.textContent='VENTA REGISTRADA';m.className='success-msg';setTimeout(()=>m.textContent='',3000);
+    try {
+        const res=await fetch(`${API_URL}/sales`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+        if(res.ok){
+            submitBtn.style.background = "var(--positive)";
+            submitBtn.style.color = "white";
+            submitBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:1.1rem;vertical-align:middle;">check</span> ¡VENTA REGISTRADA!';
+            
+            setTimeout(()=>{
+                submitBtn.disabled = false;
+                submitBtn.style.background = "";
+                submitBtn.style.color = "";
+                submitBtn.innerHTML = originalHtml;
+                
+                e.target.reset();saleCont.innerHTML='';addSaleRow();setNow('sale-date');loadSalesHistory();
+                const m=document.getElementById('sale-msg');m.textContent='VENTA REGISTRADA';m.className='success-msg';setTimeout(()=>m.textContent='',3000);
+            }, 1500);
+        } else {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalHtml;
+        }
+    } catch(err) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalHtml;
     }
 });
 
@@ -269,6 +364,11 @@ function updateExpTotal(){
 let editingExpenseId=null;
 document.getElementById('expense-form').addEventListener('submit',async(e)=>{
     e.preventDefault();
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalHtml = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="material-symbols-outlined animate-spin" style="font-size:1.1rem;vertical-align:middle;">sync</span> GUARDANDO...';
+
     const items=[];
     document.querySelectorAll('.exp-row').forEach(row=>{
         const desc=row.querySelector('.exp-item-desc').value.trim();
@@ -284,11 +384,30 @@ document.getElementById('expense-form').addEventListener('submit',async(e)=>{
     };
     let url=`${API_URL}/expenses`,method='POST';
     if(editingExpenseId){url=`${API_URL}/expenses/${editingExpenseId}`;method='PUT';}
-    const res=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    if(res.ok){
-        e.target.reset();expCont.innerHTML='';addExpRow();setNow('exp-date');loadExpensesHistory();
-        editingExpenseId=null;document.getElementById('cancel-edit-expense-btn').style.display='none';
-        const m=document.getElementById('exp-msg');m.textContent='GASTO GUARDADO';m.className='success-msg';setTimeout(()=>m.textContent='',3000);
+    try {
+        const res=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+        if(res.ok){
+            submitBtn.style.background = "var(--positive)";
+            submitBtn.style.color = "white";
+            submitBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:1.1rem;vertical-align:middle;">check</span> ¡GASTO GUARDADO!';
+            
+            setTimeout(()=>{
+                submitBtn.disabled = false;
+                submitBtn.style.background = "";
+                submitBtn.style.color = "";
+                submitBtn.innerHTML = originalHtml;
+                
+                e.target.reset();expCont.innerHTML='';addExpRow();setNow('exp-date');loadExpensesHistory();
+                editingExpenseId=null;document.getElementById('cancel-edit-expense-btn').style.display='none';
+                const m=document.getElementById('exp-msg');m.textContent='GASTO GUARDADO';m.className='success-msg';setTimeout(()=>m.textContent='',3000);
+            }, 1500);
+        } else {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalHtml;
+        }
+    } catch(err) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalHtml;
     }
 });
 async function loadExpensesHistory(){
@@ -337,11 +456,37 @@ async function loadProductsDropdown(id){
 }
 document.getElementById('prodrun-form').addEventListener('submit',async(e)=>{
     e.preventDefault();
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalHtml = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="material-symbols-outlined animate-spin" style="font-size:1.1rem;vertical-align:middle;">sync</span> GUARDANDO...';
+
     const payload={product_id:parseInt(document.getElementById('prodrun-product').value),quantity:parseInt(document.getElementById('prodrun-qty').value),date:document.getElementById('prodrun-date').value};
     let url=`${API_URL}/production`,method='POST';
     if(editingProdRunId){url=`${API_URL}/production/${editingProdRunId}`;method='PUT';}
-    const res=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    if(res.ok){e.target.reset();setNow('prodrun-date');loadProductionHistory();editingProdRunId=null;document.getElementById('cancel-edit-prodrun-btn').style.display='none';}
+    try {
+        const res=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+        if(res.ok){
+            submitBtn.style.background = "var(--positive)";
+            submitBtn.style.color = "white";
+            submitBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:1.1rem;vertical-align:middle;">check</span> ¡INGRESO GUARDADO!';
+            
+            setTimeout(()=>{
+                submitBtn.disabled = false;
+                submitBtn.style.background = "";
+                submitBtn.style.color = "";
+                submitBtn.innerHTML = originalHtml;
+                
+                e.target.reset();setNow('prodrun-date');loadProductionHistory();editingProdRunId=null;document.getElementById('cancel-edit-prodrun-btn').style.display='none';
+            }, 1500);
+        } else {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalHtml;
+        }
+    } catch(err) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalHtml;
+    }
 });
 async function editProdRun(id){
     const res=await fetch(`${API_URL}/production`);
@@ -390,17 +535,36 @@ document.getElementById('provider-form').addEventListener('submit',async(e)=>{
 });
 async function deleteProvider(id){if(confirm('¿ELIMINAR ESTE PROVEEDOR?')){await fetch(`${API_URL}/providers/${id}`,{method:'DELETE'});loadProviders();}}
 
-// PERFORMANCE (Rendimiento Inteligente con Refacción de Lógica y Estado Inicial Bloqueado)
-// PERFORMANCE (Rendimiento Inteligente con Refacción de Lógica y Estado Inicial Bloqueado)
 async function loadMetrics() {
     console.log("Iniciando carga de métricas de Performance...");
     
+    // Elementos de la interfaz de carga
+    const loaderEl = document.getElementById('perf-loader');
+    const blockedMsgEl = document.getElementById('perf-blocked-msg');
+    const dataContainerEl = document.getElementById('perf-data-container');
+    const stockTbody = document.getElementById('perf-stock-tbody');
+    const ingresosTbody = document.getElementById('perf-ingresos-productos-tbody');
+    const egresosTbody = document.getElementById('perf-egresos-categorias-tbody');
+
+    // 1. Mostrar estado de carga e inyectar Skeleton Loaders en las tablas
+    if (loaderEl) loaderEl.style.display = 'block';
+    if (blockedMsgEl) blockedMsgEl.style.display = 'none';
+    if (dataContainerEl) dataContainerEl.style.display = 'none';
+    
+    const skeletonHtml4 = `<tr class="skeleton-row"><td><div class="skeleton-bar"></div></td><td><div class="skeleton-bar"></div></td><td><div class="skeleton-bar"></div></td><td><div class="skeleton-bar"></div></td></tr>`.repeat(3);
+    const skeletonHtml3 = `<tr class="skeleton-row"><td><div class="skeleton-bar"></div></td><td><div class="skeleton-bar"></div></td><td><div class="skeleton-bar"></div></td></tr>`.repeat(3);
+    const skeletonHtml2 = `<tr class="skeleton-row"><td><div class="skeleton-bar"></div></td><td><div class="skeleton-bar"></div></td></tr>`.repeat(3);
+
+    if (stockTbody) stockTbody.innerHTML = skeletonHtml4;
+    if (ingresosTbody) ingresosTbody.innerHTML = skeletonHtml3;
+    if (egresosTbody) egresosTbody.innerHTML = skeletonHtml2;
+
     let allSales = [];
     let allExpenses = [];
     let allProducts = [];
     let stockData = [];
 
-    // 1. Consumir APIs con tolerancia a fallos
+    // 2. Consumir APIs con tolerancia a fallos
     try {
         const [salesRes, expensesRes, productsRes] = await Promise.all([
             fetch(`${API_URL}/sales`).catch(e => { console.error("Error fetching sales:", e); return { ok: false }; }),
@@ -415,9 +579,12 @@ async function loadMetrics() {
         console.error("Fallo grave al consumir endpoints iniciales:", err);
     }
 
+    // Ocultar loader de marca al concluir llamadas iniciales
+    if (loaderEl) loaderEl.style.display = 'none';
+
     console.log("Datos obtenidos - Ventas:", allSales.length, "Gastos:", allExpenses.length, "Productos:", allProducts.length);
 
-    // 2. EXCEPCIÓN DE BLOQUEO (CTR): Calcularlo de forma segura
+    // 3. EXCEPCIÓN DE BLOQUEO (CTR): Calcularlo y animarlo con el Odómetro
     try {
         let totalVentasHistorico = 0;
         let totalGTRHistorico = 0;
@@ -432,25 +599,25 @@ async function loadMetrics() {
         const ctr = totalVentasHistorico - totalGTRHistorico;
         const ctrValorEl = document.getElementById('perf-ctr-valor');
         if (ctrValorEl) {
-            ctrValorEl.textContent = `${ctr >= 0 ? '' : '-'}$${Math.abs(ctr).toFixed(2)}`;
             ctrValorEl.className = ctr >= 0 ? 'value positive' : 'value negative';
+            animateNumberValue('perf-ctr-valor', currentCtr, ctr, 800, ctr >= 0 ? '$' : '-$');
+            currentCtr = ctr;
         }
-        console.log("CTR calculado con éxito:", ctr);
+        console.log("CTR calculado:", ctr);
     } catch (e) {
         console.error("Error al calcular CTR histórico:", e);
         const ctrValorEl = document.getElementById('perf-ctr-valor');
         if (ctrValorEl) {
-            ctrValorEl.textContent = "$0.00";
+            ctrValorEl.textContent = "$0,00";
             ctrValorEl.className = 'value negative';
         }
     }
 
-    // 3. STOCK DISPONIBLE: Cargar y renderizar de forma segura
+    // 4. STOCK DISPONIBLE: Cargar y renderizar de forma segura
     try {
         const stockRes = await fetch(`${API_URL}/stock`).catch(e => { console.error("Error fetching stock:", e); return { ok: false }; });
         stockData = stockRes.ok ? await stockRes.json().catch(() => []) : [];
 
-        const stockTbody = document.getElementById('perf-stock-tbody');
         if (stockTbody && Array.isArray(stockData)) {
             const activeStock = stockData.filter(item => item.stock > 0);
             if (activeStock.length === 0) {
@@ -463,23 +630,22 @@ async function loadMetrics() {
                     const badgeText = isLow ? 'BAJO STOCK' : 'OK';
                     return `<tr>
                         <td><strong>${item.name || item.flavor || "PRODUCTO"}</strong></td>
-                        <td style="text-align: center; font-weight: 700; color: ${isLow ? '#ef4444' : 'var(--text)'};">${item.stock} u.</td>
+                        <td style="text-align: center; font-weight: 700; color: ${isLow ? '#f43f5e' : 'var(--text-main)'};">${item.stock} u.</td>
                         <td style="text-align: center; color: var(--text-muted);">${minStockThreshold} u.</td>
                         <td style="text-align: right;"><span class="${badgeClass}">${badgeText}</span></td>
                     </tr>`;
                 }).join('');
             }
         }
-        console.log("Stock disponible renderizado con éxito. Items:", stockData.length);
+        console.log("Stock disponible renderizado. Items:", stockData.length);
     } catch (e) {
         console.error("Error al cargar o renderizar Stock Disponible:", e);
-        const stockTbody = document.getElementById('perf-stock-tbody');
         if (stockTbody) {
             stockTbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); font-size: 0.8rem;">Ocurrió un error al cargar el inventario.</td></tr>`;
         }
     }
 
-    // 4. DINAMISMO DEL SELECTOR: Sólo listar meses que REALMENTE tienen datos
+    // 5. DINAMISMO DEL SELECTOR: Sólo listar meses que REALMENTE tienen datos
     try {
         const monthsSet = new Set();
         if (Array.isArray(allSales)) {
@@ -518,23 +684,23 @@ async function loadMetrics() {
             newSelector.addEventListener('change', () => {
                 const selectedMonth = newSelector.value;
                 if (!selectedMonth) {
-                    document.getElementById('perf-blocked-msg').style.display = 'block';
-                    document.getElementById('perf-data-container').style.display = 'none';
+                    if (blockedMsgEl) blockedMsgEl.style.display = 'block';
+                    if (dataContainerEl) dataContainerEl.style.display = 'none';
                 } else {
-                    document.getElementById('perf-blocked-msg').style.display = 'none';
-                    document.getElementById('perf-data-container').style.display = 'block';
+                    if (blockedMsgEl) blockedMsgEl.style.display = 'none';
+                    if (dataContainerEl) dataContainerEl.style.display = 'block';
                     calculateAndRenderMetrics(selectedMonth, allSales, allExpenses, allProducts);
                 }
             });
 
             // Si hay un período seleccionado, calcular métricas inmediatamente
             if (newSelector.value) {
-                document.getElementById('perf-blocked-msg').style.display = 'none';
-                document.getElementById('perf-data-container').style.display = 'block';
+                if (blockedMsgEl) blockedMsgEl.style.display = 'none';
+                if (dataContainerEl) dataContainerEl.style.display = 'block';
                 calculateAndRenderMetrics(newSelector.value, allSales, allExpenses, allProducts);
             } else {
-                document.getElementById('perf-blocked-msg').style.display = 'block';
-                document.getElementById('perf-data-container').style.display = 'none';
+                if (blockedMsgEl) blockedMsgEl.style.display = 'block';
+                if (dataContainerEl) dataContainerEl.style.display = 'none';
             }
         }
         console.log("Selector de meses inicializado con éxito.");
@@ -635,20 +801,28 @@ async function calculateAndRenderMetrics(targetMonth, sales, expenses, products)
 
     const rendimientoEl = document.getElementById('perf-rendimiento-real');
     if (rendimientoEl) {
-        rendimientoEl.textContent = `${rna.toFixed(2)}%`;
         rendimientoEl.className = rna >= 0 ? 'value positive' : 'value negative';
+        animateNumberValue('perf-rendimiento-real', currentRna, rna, 850, "", "%");
+        currentRna = rna;
     }
 
     const rentabilidadPorcentajeEl = document.getElementById('perf-rentabilidad-porcentaje');
     if (rentabilidadPorcentajeEl) {
         const margenPesos = totalIngresosBrutos - totalGTR;
-        rentabilidadPorcentajeEl.innerHTML = `Ganancia Estimada: <strong style="color: ${margenPesos >= 0 ? 'var(--positive)' : '#f472b6'};">${margenPesos >= 0 ? '' : '-'}$${Math.abs(margenPesos).toFixed(2)}</strong> (descontando GTR de $${totalGTR.toFixed(2)})`;
+        const formattedMargen = margenPesos.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const formattedGTR = totalGTR.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        
+        rentabilidadPorcentajeEl.innerHTML = `Ganancia Estimada: <strong style="color: ${margenPesos >= 0 ? 'var(--positive)' : 'var(--negative)'};">${margenPesos >= 0 ? '' : '-'}$${formattedMargen}</strong> (descontando GTR de $${formattedGTR})`;
     }
 
-    // Actualizar tarjetas de apoyo
-    document.getElementById('perf-total-ingresos').textContent = `$${totalIngresosBrutos.toFixed(2)}`;
-    document.getElementById('perf-total-gtr').textContent = `$${totalGTR.toFixed(2)}`;
-    document.getElementById('perf-total-egresos').textContent = `$${totalEgresos.toFixed(2)}`;
+    // Actualizar tarjetas de apoyo con el efecto de Odómetro
+    animateNumberValue('perf-total-ingresos', currentTotalIngresos, totalIngresosBrutos, 800, "$");
+    animateNumberValue('perf-total-gtr', currentTotalGtr, totalGTR, 800, "$");
+    animateNumberValue('perf-total-egresos', currentTotalEgresos, totalEgresos, 800, "$");
+
+    currentTotalIngresos = totalIngresosBrutos;
+    currentTotalGtr = totalGTR;
+    currentTotalEgresos = totalEgresos;
 }
 
 // Global init - Removed automatic row calls to prevent errors on empty data
